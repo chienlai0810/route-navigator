@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Polygon, Marker, Popup, useMap } from 'react-leaflet';
+import { useEffect, useRef, useState } from 'react';
+import { MapContainer, TileLayer, Polygon, Marker, Popup, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useMapStore } from '@/hooks/useMapStore';
@@ -17,8 +17,8 @@ const createPostOfficeIcon = () => {
   return L.divIcon({
     className: 'custom-marker',
     html: `
-      <div class="w-10 h-10 rounded-full bg-primary flex items-center justify-center shadow-lg border-2 border-white">
-        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, hsl(213, 94%, 28%) 0%, hsl(213, 94%, 35%) 100%); display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3); border: 2px solid white;">
+        <svg style="width: 20px; height: 20px; color: white;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
         </svg>
       </div>
@@ -30,7 +30,7 @@ const createPostOfficeIcon = () => {
 
 function MapEvents() {
   const map = useMap();
-  const { activeTool, addPolygonPoint, isDrawing } = useMapStore();
+  const { activeTool, addPolygonPoint } = useMapStore();
 
   useEffect(() => {
     if (activeTool === 'draw') {
@@ -109,19 +109,21 @@ export function MapView() {
               click: () => setSelectedRoute(route.id),
             }}
           >
-            <Popup>
-              <div className="p-1">
-                <h3 className="font-semibold text-sm">{route.name}</h3>
-                <p className="text-xs text-muted-foreground mt-1">
+            <Tooltip sticky>
+              <div className="text-sm">
+                <strong>{route.name}</strong>
+                <br />
+                <span className="text-xs">
                   Diện tích: {(route.area / 1000).toFixed(1)} km²
-                </p>
+                </span>
                 {route.assignedEmployeeName && (
-                  <p className="text-xs text-muted-foreground">
-                    NV: {route.assignedEmployeeName}
-                  </p>
+                  <>
+                    <br />
+                    <span className="text-xs">NV: {route.assignedEmployeeName}</span>
+                  </>
                 )}
               </div>
-            </Popup>
+            </Tooltip>
           </Polygon>
         ))}
 
@@ -146,13 +148,15 @@ export function MapView() {
             position={[po.coordinates.lat, po.coordinates.lng]}
             icon={createPostOfficeIcon()}
           >
-            <Popup>
-              <div className="p-1">
-                <h3 className="font-semibold text-sm">{po.name}</h3>
-                <p className="text-xs text-muted-foreground">{po.code}</p>
-                <p className="text-xs text-muted-foreground/70 mt-1">{po.address}</p>
+            <Tooltip>
+              <div className="text-sm">
+                <strong>{po.name}</strong>
+                <br />
+                <span className="text-xs">{po.code}</span>
+                <br />
+                <span className="text-xs opacity-70">{po.address}</span>
               </div>
-            </Popup>
+            </Tooltip>
           </Marker>
         ))}
       </MapContainer>
