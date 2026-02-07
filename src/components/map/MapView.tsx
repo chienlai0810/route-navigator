@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "@geoman-io/leaflet-geoman-free";
+import "@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css";
 import { useMapStore } from "@/hooks/useMapStore";
 
 // Fix for default marker icons (Leaflet expects image assets)
@@ -89,34 +91,141 @@ export function MapView() {
 
     mapRef.current = map;
 
+    // Initialize Leaflet Geoman after map is fully ready
+    map.whenReady(() => {
+      map.pm.addControls({
+        position: 'topleft',
+        drawMarker: true,
+        drawCircleMarker: true,
+        drawPolyline: true,
+        drawRectangle: true,
+        drawPolygon: true,
+        drawCircle: true,
+        editMode: true,
+        dragMode: true,
+        cutPolygon: true,
+        removalMode: true,
+        rotateMode: true,
+      });
+    });
+
     return () => {
       map.remove();
       mapRef.current = null;
     };
   }, []);
 
-  // 2) Cursor + interaction mode
+  // 2) Cursor + interaction mode with Geoman integration
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !map.pm) return;
 
     const container = map.getContainer();
+    
+    // Disable all Geoman modes first
+    map.pm.disableDraw();
+    map.pm.disableGlobalEditMode();
+    map.pm.disableGlobalDragMode();
+    map.pm.disableGlobalRemovalMode();
+
     if (activeTool === "draw") {
       container.style.cursor = "crosshair";
       map.doubleClickZoom.disable();
+      // Enable Polygon drawing mode
+      map.pm.enableDraw('Polygon', {
+        snappable: true,
+        snapDistance: 20,
+        allowSelfIntersection: false,
+        templineStyle: {
+          color: 'hsl(var(--primary))',
+          weight: 2,
+          dashArray: '5, 5',
+        },
+        hintlineStyle: {
+          color: 'hsl(var(--primary))',
+          dashArray: '5, 5',
+        },
+        pathOptions: {
+          color: 'hsl(var(--primary))',
+          fillColor: 'hsl(var(--primary))',
+          fillOpacity: 0.25,
+          weight: 2,
+        },
+      });
+    } else if (activeTool === "edit") {
+      container.style.cursor = "pointer";
+      map.doubleClickZoom.enable();
+      // Enable edit mode for all layers
+      map.pm.enableGlobalEditMode({
+        snappable: true,
+        snapDistance: 20,
+      });
     } else if (activeTool === "move") {
       container.style.cursor = "move";
       map.doubleClickZoom.enable();
+      // Enable drag mode for all layers
+      map.pm.enableGlobalDragMode();
     } else if (activeTool === "delete") {
       container.style.cursor = "not-allowed";
       map.doubleClickZoom.enable();
+      // Enable removal mode
+      map.pm.enableGlobalRemovalMode();
     } else {
       container.style.cursor = "";
       map.doubleClickZoom.enable();
     }
   }, [activeTool]);
 
-  // 3) Drawing: click to add vertices, dblclick to finish
+  // 3) Geoman event listeners
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // When a shape is created
+    const onDrawEnd = (e: any) => {
+      const layer = e.layer;
+      console.log('Shape created:', layer);
+      
+      // Layer is already added to the map by Geoman
+      // Just track it in our drawing layer group for management
+      if (drawingLayerRef.current && !drawingLayerRef.current.hasLayer(layer)) {
+        drawingLayerRef.current.addLayer(layer);
+      }
+
+      // Get coordinates
+      if (layer instanceof L.Polygon) {
+        const coords = layer.getLatLngs()[0] as L.LatLng[];
+        console.log('Polygon coordinates:', coords);
+        // You can save to store here
+      }
+
+      // Switch back to select mode after drawing
+      setActiveTool('select');
+    };
+
+    // When a shape is edited
+    const onEdit = (e: any) => {
+      console.log('Shape edited:', e);
+    };
+
+    // When a shape is removed
+    const onRemove = (e: any) => {
+      console.log('Shape removed:', e);
+    };
+
+    // Register event listeners
+    map.on('pm:create', onDrawEnd);
+    map.on('pm:edit', onEdit);
+    map.on('pm:remove', onRemove);
+
+    return () => {
+      map.off('pm:create', onDrawEnd);
+      map.off('pm:edit', onEdit);
+      map.off('pm:remove', onRemove);
+    };
+  }, [setActiveTool]);
+
+  // 3) Drawing: click to add vertices, dblclick to finish (Legacy - can be removed if using Geoman)
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -214,14 +323,26 @@ export function MapView() {
     });
   }, [postOffices, visibleRoutes, selectedRouteId, setSelectedRoute]);
 
-  // 5) Render current drawing polygon
+  // 5) Render current drawing polygon (legacy click-based drawing only)
+  // Note: This effect is for the legacy drawing system. Geoman shapes are managed separately.
   useEffect(() => {
     const drawingLayer = drawingLayerRef.current;
     if (!drawingLayer) return;
 
-    drawingLayer.clearLayers();
+    // Only manage temporary drawing visualization when actively in draw mode
+    // Don't clear layers from Geoman when switching modes
+    if (activeTool !== "draw") return;
 
-    if (activeTool !== "draw" || currentPolygon.length === 0) return;
+    // Clear only temporary shapes when in draw mode
+    drawingLayer.eachLayer((layer: any) => {
+      // Only remove layers that are temporary (from legacy click system)
+      // Keep layers that were added by Geoman (they have _pmTempLayer or are complete)
+      if (layer.options?.dashArray === "5, 5" && !layer.pm) {
+        drawingLayer.removeLayer(layer);
+      }
+    });
+
+    if (currentPolygon.length === 0) return;
 
     const latlngs = currentPolygon.map((p) => [p.lat, p.lng] as [number, number]);
 

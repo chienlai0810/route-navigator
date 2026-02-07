@@ -59,6 +59,20 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+- Leaflet & Leaflet Geoman - Interactive map with advanced drawing/editing tools
+
+## Map Features
+
+This application includes powerful map editing capabilities powered by **Leaflet Geoman**:
+
+- 🎨 **Draw Tool** - Create new polygons/routes on the map
+- ✏️ **Edit Tool** - Modify vertices of existing shapes
+- 🔄 **Move Tool** - Drag and reposition entire routes
+- 🗑️ **Delete Tool** - Remove routes with a click
+- 📍 **Snapping** - Automatic vertex alignment for precision
+- 🎯 **Custom Styling** - Theme-integrated colors and styles
+
+For detailed usage instructions, see [GEOMAN_GUIDE.md](./GEOMAN_GUIDE.md)
 
 ## How can I deploy this project?
 

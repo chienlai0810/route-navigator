@@ -248,4 +248,50 @@
   .glow-route-all {
     box-shadow: 0 0 16px hsl(var(--route-all) / 0.4);
   }
-}
+
+  /* Leaflet Geoman Custom Styles */
+  /* Toolbar is now visible - removed display: none */
+
+  /* Style Geoman markers and vertices */
+  .marker-icon {
+    background-color: hsl(var(--primary)) !important;
+    border-color: hsl(var(--background)) !important;
+  }
+
+  .leaflet-pm-draggable {
+    cursor: move !important;
+  }
+
+  /* Vertex markers */
+  .leaflet-vertex-icon {
+    background-color: hsl(var(--primary)) !important;
+    border: 2px solid hsl(var(--background)) !important;
+    cursor: pointer !important;
+  }
+
+  .leaflet-vertex-icon:hover {
+    background-color: hsl(var(--primary) / 0.8) !important;
+  }
+
+  /* Middle markers (for adding new vertices) */
+  .leaflet-middle-icon {
+    background-color: hsl(var(--muted)) !important;
+    border: 2px solid hsl(var(--background)) !important;
+    opacity: 0.6;
+  }
+
+  .leaflet-middle-icon:hover {
+    opacity: 1;
+    background-color: hsl(var(--primary) / 0.5) !important;
+  }
+
+  /* Tooltip hints */
+  .leaflet-pm-tooltip {
+    background: hsl(var(--card)) !important;
+    color: hsl(var(--card-foreground)) !important;
+    border: 1px solid hsl(var(--border)) !important;
+    border-radius: var(--radius) !important;
+    padding: 0.5rem !important;
+    font-size: 0.875rem !important;
+    box-shadow: 0 4px 12px -2px hsl(var(--foreground) / 0.1) !important;
+  }}
