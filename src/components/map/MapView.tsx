@@ -46,7 +46,11 @@ function createPostOfficeIcon() {
   });
 }
 
-export function MapView() {
+interface MapViewProps {
+  onPolygonCreated?: (polygon: Array<{ lat: number; lng: number }>, layer: L.Layer) => void;
+}
+
+export function MapView({ onPolygonCreated }: MapViewProps) {
   const {
     routes,
     postOffices,
@@ -192,11 +196,13 @@ export function MapView() {
         drawingLayerRef.current.addLayer(layer);
       }
 
-      // Get coordinates
+      // Get coordinates and notify parent
       if (layer instanceof L.Polygon) {
-        const coords = layer.getLatLngs()[0] as L.LatLng[];
-        console.log('Polygon coordinates:', coords);
-        // You can save to store here
+        const coords = (layer.getLatLngs()[0] as L.LatLng[]).map((ll) => ({
+          lat: ll.lat,
+          lng: ll.lng,
+        }));
+        onPolygonCreated?.(coords, layer);
       }
 
       // Switch back to select mode after drawing
