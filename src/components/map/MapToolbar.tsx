@@ -1,7 +1,6 @@
 import {
   MousePointer2,
   Pentagon,
-  Edit3,
   Move,
   Trash2,
   Undo2,
@@ -28,7 +27,6 @@ import {
 const tools: { id: DrawingTool; icon: typeof MousePointer2; label: string; shortcut?: string }[] = [
   { id: 'select', icon: MousePointer2, label: 'Chọn', shortcut: 'V' },
   { id: 'draw', icon: Pentagon, label: 'Vẽ tuyến mới', shortcut: 'D' },
-  { id: 'edit', icon: Edit3, label: 'Chỉnh sửa đỉnh', shortcut: 'E' },
   { id: 'move', icon: Move, label: 'Di chuyển tuyến', shortcut: 'M' },
   { id: 'delete', icon: Trash2, label: 'Xóa tuyến', shortcut: 'Del' },
 ];

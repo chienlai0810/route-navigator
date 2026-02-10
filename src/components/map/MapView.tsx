@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "@geoman-io/leaflet-geoman-free";
@@ -60,6 +60,8 @@ export function MapView({ onPolygonCreated }: MapViewProps) {
     activeTool,
     addPolygonPoint,
     setActiveTool,
+    updateRoute,
+    setMapInstance,
   } = useMapStore();
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -67,6 +69,12 @@ export function MapView({ onPolygonCreated }: MapViewProps) {
   const routeLayerRef = useRef<L.LayerGroup | null>(null);
   const postOfficeLayerRef = useRef<L.LayerGroup | null>(null);
   const drawingLayerRef = useRef<L.LayerGroup | null>(null);
+  // Track layer-to-route mapping
+  const layerToRouteMap = useRef<Map<number, string>>(new Map());
+  const routeToLayerMap = useRef<Map<string, L.Polygon>>(new Map());
+  
+  // Reset counter to force re-render when reset button is clicked
+  const [resetCounter, setResetCounter] = useState(0);
 
   const visibleRoutes = useMemo(
     () => routes.filter((r) => r.isVisible),
@@ -94,6 +102,7 @@ export function MapView({ onPolygonCreated }: MapViewProps) {
     drawingLayerRef.current = L.layerGroup().addTo(map);
 
     mapRef.current = map;
+    setMapInstance(map);
 
     // Initialize Leaflet Geoman after map is fully ready
     map.whenReady(() => {
@@ -110,14 +119,16 @@ export function MapView({ onPolygonCreated }: MapViewProps) {
         cutPolygon: true,
         removalMode: true,
         rotateMode: true,
+        customControls: true,
       });
     });
 
     return () => {
+      setMapInstance(null);
       map.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, [setMapInstance]);
 
   // 2) Cursor + interaction mode with Geoman integration
   useEffect(() => {
@@ -212,6 +223,41 @@ export function MapView({ onPolygonCreated }: MapViewProps) {
     // When a shape is edited
     const onEdit = (e: any) => {
       console.log('Shape edited:', e);
+      
+      const layer = e.layer;
+      if (layer instanceof L.Polygon) {
+        const layerId = L.Util.stamp(layer);
+        const routeId = layerToRouteMap.current.get(layerId);
+        
+        if (routeId) {
+          const coords = layer.getLatLngs()[0] as L.LatLng[];
+          // Calculate area in m²
+          const calculateArea = (latlngs: L.LatLng[]) => {
+            if (latlngs.length < 3) return 0;
+            const R = 6371000;
+            let area = 0;
+            for (let i = 0; i < latlngs.length; i++) {
+              const j = (i + 1) % latlngs.length;
+              const lat1 = (latlngs[i].lat * Math.PI) / 180;
+              const lat2 = (latlngs[j].lat * Math.PI) / 180;
+              const lng1 = (latlngs[i].lng * Math.PI) / 180;
+              const lng2 = (latlngs[j].lng * Math.PI) / 180;
+              area += (lng2 - lng1) * (2 + Math.sin(lat1) + Math.sin(lat2));
+            }
+            return Math.abs((area * R * R) / 2);
+          };
+          
+          const areaM2 = calculateArea(coords);
+          
+          // Update route in store immediately
+          updateRoute(routeId, {
+            polygon: coords.map(c => ({ lat: c.lat, lng: c.lng })),
+            area: areaM2,
+          });
+          
+          console.log('Route updated in store:', routeId, 'New area:', areaM2);
+        }
+      }
     };
 
     // When a shape is removed
@@ -229,36 +275,36 @@ export function MapView({ onPolygonCreated }: MapViewProps) {
       map.off('pm:edit', onEdit);
       map.off('pm:remove', onRemove);
     };
-  }, [setActiveTool]);
+  }, [setActiveTool, onPolygonCreated, updateRoute]);
 
   // 3) Drawing: click to add vertices, dblclick to finish (Legacy - can be removed if using Geoman)
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map) return;
+  // useEffect(() => {
+  //   const map = mapRef.current;
+  //   if (!map) return;
 
-    const onClick = (e: L.LeafletMouseEvent) => {
-      if (activeTool !== "draw") return;
-      addPolygonPoint({ lat: e.latlng.lat, lng: e.latlng.lng });
-    };
+  //   const onClick = (e: L.LeafletMouseEvent) => {
+  //     if (activeTool !== "draw") return;
+  //     addPolygonPoint({ lat: e.latlng.lat, lng: e.latlng.lng });
+  //   };
 
-    const onDblClick = (e: L.LeafletMouseEvent) => {
-      if (activeTool !== "draw") return;
-      // Prevent zoom
-      e.originalEvent?.preventDefault?.();
-      e.originalEvent?.stopPropagation?.();
+  //   const onDblClick = (e: L.LeafletMouseEvent) => {
+  //     if (activeTool !== "draw") return;
+  //     // Prevent zoom
+  //     e.originalEvent?.preventDefault?.();
+  //     e.originalEvent?.stopPropagation?.();
 
-      // For now: finish drawing mode (saving is handled by the top toolbar)
-      setActiveTool("select");
-    };
+  //     // For now: finish drawing mode (saving is handled by the top toolbar)
+  //     setActiveTool("select");
+  //   };
 
-    map.on("click", onClick);
-    map.on("dblclick", onDblClick);
+  //   map.on("click", onClick);
+  //   map.on("dblclick", onDblClick);
 
-    return () => {
-      map.off("click", onClick);
-      map.off("dblclick", onDblClick);
-    };
-  }, [activeTool, addPolygonPoint, setActiveTool]);
+  //   return () => {
+  //     map.off("click", onClick);
+  //     map.off("dblclick", onDblClick);
+  //   };
+  // }, [activeTool, addPolygonPoint, setActiveTool]);
 
   // 4) Render routes + markers
   useEffect(() => {
@@ -268,24 +314,55 @@ export function MapView({ onPolygonCreated }: MapViewProps) {
 
     if (!routeLayer || !postOfficeLayer || !map) return;
 
-    routeLayer.clearLayers();
-    postOfficeLayer.clearLayers();
+    // Track which routes we're processing
+    const processedRouteIds = new Set<string>();
 
-    // Routes
+    // Update or create polygons for visible routes
     visibleRoutes.forEach((route) => {
+      processedRouteIds.add(route.id);
       const isSelected = selectedRouteId === route.id;
-
-      const polygon = L.polygon(
-        route.polygon.map((p) => [p.lat, p.lng] as [number, number]),
-        {
+      
+      // Check if layer already exists
+      let polygon = routeToLayerMap.current.get(route.id);
+      
+      if (polygon && routeLayer.hasLayer(polygon)) {
+        // Layer exists, just update style (not coordinates to preserve edits)
+        polygon.setStyle({
           color: route.color,
           fillColor: route.color,
           fillOpacity: isSelected ? 0.4 : 0.25,
           weight: isSelected ? 3 : 2,
-        }
-      );
+        });
+        
+        // Update tooltip
+        polygon.unbindTooltip();
+        polygon.bindTooltip(
+          `<div style="font-size: 12px; line-height: 1.35;">
+            <div style="font-weight: 600; margin-bottom: 2px;">${route.name}</div>
+            <div style="opacity: 0.8;">Diện tích: ${formatKm2(route.area)} km²</div>
+            ${route.assignedEmployeeName ? `<div style="opacity: 0.8;">NV: ${route.assignedEmployeeName}</div>` : ""}
+          </div>`,
+          { sticky: true }
+        );
+      } else {
+        // Create new polygon
+        polygon = L.polygon(
+          route.polygon.map((p) => [p.lat, p.lng] as [number, number]),
+          {
+            color: route.color,
+            fillColor: route.color,
+            fillOpacity: isSelected ? 0.4 : 0.25,
+            weight: isSelected ? 3 : 2,
+            pmIgnore: false,
+          }
+        );
 
-      polygon.on("click", () => setSelectedRoute(route.id));
+        // Track layer-route mapping
+        const layerId = L.Util.stamp(polygon);
+        layerToRouteMap.current.set(layerId, route.id);
+        routeToLayerMap.current.set(route.id, polygon);
+
+        polygon.on("click", () => setSelectedRoute(route.id, true));
       polygon.on("mouseover", () => {
         polygon.setStyle({ weight: 3, fillOpacity: 0.35 });
       });
@@ -297,17 +374,31 @@ export function MapView({ onPolygonCreated }: MapViewProps) {
         });
       });
 
-      polygon.bindTooltip(
-        `<div style="font-size: 12px; line-height: 1.35;">
-          <div style="font-weight: 600; margin-bottom: 2px;">${route.name}</div>
-          <div style="opacity: 0.8;">Diện tích: ${formatKm2(route.area)} km²</div>
-          ${route.assignedEmployeeName ? `<div style="opacity: 0.8;">NV: ${route.assignedEmployeeName}</div>` : ""}
-        </div>`,
-        { sticky: true }
-      );
+        polygon.bindTooltip(
+          `<div style="font-size: 12px; line-height: 1.35;">
+            <div style="font-weight: 600; margin-bottom: 2px;">${route.name}</div>
+            <div style="opacity: 0.8;">Diện tích: ${formatKm2(route.area)} km²</div>
+            ${route.assignedEmployeeName ? `<div style="opacity: 0.8;">NV: ${route.assignedEmployeeName}</div>` : ""}
+          </div>`,
+          { sticky: true }
+        );
 
-      polygon.addTo(routeLayer);
+        polygon.addTo(routeLayer);
+      }
     });
+    
+    // Remove layers for routes that are no longer visible or deleted
+    routeToLayerMap.current.forEach((layer, routeId) => {
+      if (!processedRouteIds.has(routeId)) {
+        const layerId = L.Util.stamp(layer);
+        layerToRouteMap.current.delete(layerId);
+        routeToLayerMap.current.delete(routeId);
+        routeLayer.removeLayer(layer);
+      }
+    });
+
+    // Post offices - clear and recreate
+    postOfficeLayer.clearLayers();
 
     // Post offices
     const poIcon = createPostOfficeIcon();
@@ -327,7 +418,7 @@ export function MapView({ onPolygonCreated }: MapViewProps) {
 
       marker.addTo(postOfficeLayer);
     });
-  }, [postOffices, visibleRoutes, selectedRouteId, setSelectedRoute]);
+  }, [postOffices, visibleRoutes, selectedRouteId, setSelectedRoute, resetCounter]);
 
   // 5) Render current drawing polygon (legacy click-based drawing only)
   // Note: This effect is for the legacy drawing system. Geoman shapes are managed separately.

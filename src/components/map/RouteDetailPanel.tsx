@@ -106,28 +106,6 @@ export function RouteDetailPanel() {
           </div>
         </div>
       </div>
-
-      {/* Actions */}
-      <div className="p-4 border-t border-border flex gap-2">
-        <Button
-          variant="outline"
-          className="flex-1"
-          onClick={() => setActiveTool('edit')}
-        >
-          <Edit2 className="w-4 h-4 mr-2" />
-          Chỉnh sửa
-        </Button>
-        <Button
-          variant="outline"
-          className="text-destructive hover:text-destructive hover:bg-destructive/10"
-          onClick={() => {
-            deleteRoute(route.id);
-            setSelectedRoute(null);
-          }}
-        >
-          <Trash2 className="w-4 h-4" />
-        </Button>
-      </div>
     </div>
   );
 }

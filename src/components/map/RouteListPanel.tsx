@@ -41,24 +41,33 @@ export function RouteListPanel() {
     toggleRouteVisibility,
     filterPostOfficeId,
     filterRouteType,
+    filterCity,
+    filterDistrict,
     setFilterPostOfficeId,
     setFilterRouteType,
-    setActiveTool,
+    setFilterCity,
+    setFilterDistrict,
     deleteRoute,
   } = useMapStore();
 
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredRoutes = routes.filter((route) => {
+    const postOffice = postOffices.find(po => po.id === route.postOfficeId);
+    
+    if (filterCity && postOffice?.city !== filterCity) return false;
+    if (filterDistrict && postOffice?.district !== filterDistrict) return false;
     if (filterPostOfficeId && route.postOfficeId !== filterPostOfficeId) return false;
     if (filterRouteType && route.type !== filterRouteType) return false;
     if (searchTerm && !route.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
     return true;
   });
 
-  const handleNewRoute = () => {
-    setActiveTool('draw');
-  };
+  // Get unique cities and districts
+  const cities = Array.from(new Set(postOffices.map(po => po.city))).sort();
+  const districts = filterCity 
+    ? Array.from(new Set(postOffices.filter(po => po.city === filterCity).map(po => po.district))).sort()
+    : [];
 
   return (
     <div className="w-80 bg-card border-r border-border flex flex-col h-full">
@@ -66,10 +75,10 @@ export function RouteListPanel() {
       <div className="p-4 border-b border-border">
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-semibold text-lg">Danh sách Tuyến</h2>
-          <Button size="sm" onClick={handleNewRoute} className="gradient-primary text-primary-foreground">
+          {/* <Button size="sm" onClick={handleNewRoute} className="gradient-primary text-primary-foreground">
             <Plus className="w-4 h-4 mr-1" />
             Thêm
-          </Button>
+          </Button> */}
         </div>
 
         {/* Search */}
@@ -84,37 +93,81 @@ export function RouteListPanel() {
         </div>
 
         {/* Filters */}
-        <div className="flex gap-2">
-          <Select
-            value={filterPostOfficeId || 'all'}
-            onValueChange={(v) => setFilterPostOfficeId(v === 'all' ? null : v)}
-          >
-            <SelectTrigger className="flex-1 h-9">
-              <SelectValue placeholder="Bưu cục" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả BC</SelectItem>
-              {postOffices.map((po) => (
-                <SelectItem key={po.id} value={po.id}>
-                  {po.code}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <div className="space-y-2">
+          {/* City and District Filters */}
+          <div className="flex gap-2">
+            <Select
+              value={filterCity || 'all'}
+              onValueChange={(v) => setFilterCity(v === 'all' ? null : v)}
+            >
+              <SelectTrigger className="flex-1 h-9">
+                <SelectValue placeholder="Tỉnh/TP" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả tỉnh/TP</SelectItem>
+                {cities.map((city) => (
+                  <SelectItem key={city} value={city}>
+                    {city}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          <Select
-            value={filterRouteType || 'all'}
-            onValueChange={(v) => setFilterRouteType(v === 'all' ? null : (v as RouteType))}
-          >
-            <SelectTrigger className="flex-1 h-9">
-              <SelectValue placeholder="Loại" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả loại</SelectItem>
-              <SelectItem value="delivery">Giao hàng</SelectItem>
-              <SelectItem value="pickup">Nhận hàng</SelectItem>
-            </SelectContent>
-          </Select>
+            <Select
+              value={filterDistrict || 'all'}
+              onValueChange={(v) => setFilterDistrict(v === 'all' ? null : v)}
+              disabled={!filterCity}
+            >
+              <SelectTrigger className="flex-1 h-9">
+                <SelectValue placeholder="Quận/Huyện" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả Q/H</SelectItem>
+                {districts.map((district) => (
+                  <SelectItem key={district} value={district}>
+                    {district}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Post Office and Route Type Filters */}
+          <div className="flex gap-2">
+            <Select
+              value={filterPostOfficeId || 'all'}
+              onValueChange={(v) => setFilterPostOfficeId(v === 'all' ? null : v)}
+            >
+              <SelectTrigger className="flex-1 h-9">
+                <SelectValue placeholder="Bưu cục" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả BC</SelectItem>
+                {postOffices
+                  .filter(po => !filterCity || po.city === filterCity)
+                  .filter(po => !filterDistrict || po.district === filterDistrict)
+                  .map((po) => (
+                    <SelectItem key={po.id} value={po.id}>
+                      {po.code}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+
+            <Select
+              value={filterRouteType || 'all'}
+              onValueChange={(v) => setFilterRouteType(v === 'all' ? null : (v as RouteType))}
+            >
+              <SelectTrigger className="flex-1 h-9">
+                <SelectValue placeholder="Loại" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả loại</SelectItem>
+                <SelectItem value="delivery">Giao hàng</SelectItem>
+                <SelectItem value="pickup">Nhận hàng</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
@@ -127,7 +180,7 @@ export function RouteListPanel() {
           return (
             <div
               key={route.id}
-              onClick={() => setSelectedRoute(isSelected ? null : route.id)}
+              onClick={() => setSelectedRoute(isSelected ? null : route.id, !isSelected)}
               className={cn(
                 'p-3 rounded-lg cursor-pointer transition-all duration-200 border',
                 isSelected
@@ -181,10 +234,10 @@ export function RouteListPanel() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem>
+                      {/* <DropdownMenuItem>
                         <Pencil className="w-4 h-4 mr-2" />
                         Chỉnh sửa
-                      </DropdownMenuItem>
+                      </DropdownMenuItem> */}
                       <DropdownMenuItem
                         className="text-destructive"
                         onClick={(e) => {

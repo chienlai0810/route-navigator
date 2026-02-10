@@ -2,6 +2,8 @@ export interface PostOffice {
   id: string;
   code: string;
   name: string;
+  city: string; // Tỉnh/Thành phố
+  district: string; // Quận/Huyện
   address: string;
   phone: string;
   status: 'active' | 'maintenance';

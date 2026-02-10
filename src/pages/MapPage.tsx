@@ -5,6 +5,7 @@ import { RouteDetailPanel } from '@/components/map/RouteDetailPanel';
 import { NewRouteDrawer } from '@/components/map/NewRouteDrawer';
 import { useMapStore } from '@/hooks/useMapStore';
 import L from 'leaflet';
+import { EditRoutePanel } from '@/components/map/EditRoutePanel';
 
 export default function MapPage() {
   const { selectedRouteId, showRoutePanel } = useMapStore();
@@ -66,7 +67,7 @@ export default function MapPage() {
         </div>
       </div>
 
-      {selectedRouteId && <RouteDetailPanel />}
+      {selectedRouteId && <EditRoutePanel />}
 
       <NewRouteDrawer
         open={drawerOpen}

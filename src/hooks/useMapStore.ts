@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { Route, PostOffice, DrawingTool, Settings, RouteType } from '@/types';
+import L from 'leaflet';
 
 interface MapState {
   // Data
@@ -18,13 +19,18 @@ interface MapState {
   filterPostOfficeId: string | null;
   filterRouteType: RouteType | null;
   filterEmployeeId: string | null;
+  filterCity: string | null;
+  filterDistrict: string | null;
   
   // Settings
   settings: Settings;
   
+  // Map instance
+  mapInstance: L.Map | null;
+  
   // Actions
   setActiveTool: (tool: DrawingTool) => void;
-  setSelectedRoute: (id: string | null) => void;
+  setSelectedRoute: (id: string | null, zoomTo?: boolean) => void;
   setSelectedPostOffice: (id: string | null) => void;
   toggleRouteVisibility: (id: string) => void;
   addRoute: (route: Route) => void;
@@ -35,10 +41,14 @@ interface MapState {
   setShowRoutePanel: (show: boolean) => void;
   setFilterPostOfficeId: (id: string | null) => void;
   setFilterRouteType: (type: RouteType | null) => void;
+  setFilterCity: (city: string | null) => void;
+  setFilterDistrict: (district: string | null) => void;
   setIsDrawing: (isDrawing: boolean) => void;
   addPolygonPoint: (point: { lat: number; lng: number }) => void;
   clearCurrentPolygon: () => void;
   updateSettings: (settings: Partial<Settings>) => void;
+  setMapInstance: (map: L.Map | null) => void;
+  zoomToRoute: (routeId: string) => void;
 }
 
 // Mock data
@@ -47,7 +57,9 @@ const mockPostOffices: PostOffice[] = [
     id: 'po-1',
     code: 'BC-HN01',
     name: 'Bưu cục Hoàn Kiếm',
-    address: '15 Đinh Tiên Hoàng, Hoàn Kiếm, Hà Nội',
+    city: 'Hà Nội',
+    district: 'Hoàn Kiếm',
+    address: '15 Đinh Tiên Hoàng',
     phone: '024 3825 1234',
     status: 'active',
     coordinates: { lat: 21.0285, lng: 105.8542 },
@@ -56,7 +68,9 @@ const mockPostOffices: PostOffice[] = [
     id: 'po-2',
     code: 'BC-HN02',
     name: 'Bưu cục Ba Đình',
-    address: '25 Liễu Giai, Ba Đình, Hà Nội',
+    city: 'Hà Nội',
+    district: 'Ba Đình',
+    address: '25 Liễu Giai',
     phone: '024 3762 5678',
     status: 'active',
     coordinates: { lat: 21.0340, lng: 105.8180 },
@@ -65,10 +79,67 @@ const mockPostOffices: PostOffice[] = [
     id: 'po-3',
     code: 'BC-HN03',
     name: 'Bưu cục Cầu Giấy',
-    address: '88 Xuân Thủy, Cầu Giấy, Hà Nội',
+    city: 'Hà Nội',
+    district: 'Cầu Giấy',
+    address: '88 Xuân Thủy',
     phone: '024 3793 9012',
     status: 'maintenance',
     coordinates: { lat: 21.0380, lng: 105.7820 },
+  },
+  {
+    id: 'po-4',
+    code: 'BC-HN04',
+    name: 'Bưu cục Đống Đa',
+    city: 'Hà Nội',
+    district: 'Đống Đa',
+    address: '123 Xã Đàn',
+    phone: '024 3852 7890',
+    status: 'active',
+    coordinates: { lat: 21.0150, lng: 105.8280 },
+  },
+  {
+    id: 'po-5',
+    code: 'BC-HCM01',
+    name: 'Bưu cục Quận 1',
+    city: 'TP. Hồ Chí Minh',
+    district: 'Quận 1',
+    address: '125 Nguyễn Huệ',
+    phone: '028 3823 4567',
+    status: 'active',
+    coordinates: { lat: 10.7756, lng: 106.7019 },
+  },
+  {
+    id: 'po-6',
+    code: 'BC-HCM02',
+    name: 'Bưu cục Quận 3',
+    city: 'TP. Hồ Chí Minh',
+    district: 'Quận 3',
+    address: '45 Võ Văn Tần',
+    phone: '028 3930 5678',
+    status: 'active',
+    coordinates: { lat: 10.7824, lng: 106.6926 },
+  },
+  {
+    id: 'po-7',
+    code: 'BC-DN01',
+    name: 'Bưu cục Hải Châu',
+    city: 'Đà Nẵng',
+    district: 'Hải Châu',
+    address: '56 Lê Duẩn',
+    phone: '0236 3821 234',
+    status: 'active',
+    coordinates: { lat: 16.0544, lng: 108.2022 },
+  },
+  {
+    id: 'po-8',
+    code: 'BC-DN02',
+    name: 'Bưu cục Thanh Khê',
+    city: 'Đà Nẵng',
+    district: 'Thanh Khê',
+    address: '78 Nguyễn Văn Linh',
+    phone: '0236 3654 789',
+    status: 'maintenance',
+    coordinates: { lat: 16.0678, lng: 108.2070 },
   },
 ];
 
@@ -132,7 +203,7 @@ const mockRoutes: Route[] = [
   },
 ];
 
-export const useMapStore = create<MapState>((set) => ({
+export const useMapStore = create<MapState>((set, get) => ({
   // Initial Data
   routes: mockRoutes,
   postOffices: mockPostOffices,
@@ -149,6 +220,8 @@ export const useMapStore = create<MapState>((set) => ({
   filterPostOfficeId: null,
   filterRouteType: null,
   filterEmployeeId: null,
+  filterCity: null,
+  filterDistrict: null,
   
   // Settings
   settings: {
@@ -160,10 +233,18 @@ export const useMapStore = create<MapState>((set) => ({
     },
   },
   
+  // Map instance
+  mapInstance: null,
+  
   // Actions
   setActiveTool: (tool) => set({ activeTool: tool, isDrawing: tool === 'draw' }),
   
-  setSelectedRoute: (id) => set({ selectedRouteId: id }),
+  setSelectedRoute: (id, zoomTo = false) => {
+    set({ selectedRouteId: id });
+    if (zoomTo && id) {
+      get().zoomToRoute(id);
+    }
+  },
   
   setSelectedPostOffice: (id) => set({ selectedPostOfficeId: id }),
   
@@ -206,6 +287,10 @@ export const useMapStore = create<MapState>((set) => ({
   
   setFilterRouteType: (type) => set({ filterRouteType: type }),
   
+  setFilterCity: (city) => set({ filterCity: city, filterDistrict: null }),
+  
+  setFilterDistrict: (district) => set({ filterDistrict: district }),
+  
   setIsDrawing: (isDrawing) => set({ isDrawing }),
   
   addPolygonPoint: (point) =>
@@ -215,4 +300,27 @@ export const useMapStore = create<MapState>((set) => ({
   
   updateSettings: (newSettings) =>
     set((state) => ({ settings: { ...state.settings, ...newSettings } })),
+  
+  setMapInstance: (map) => set({ mapInstance: map }),
+  
+  zoomToRoute: (routeId) => {
+    const state = get();
+    const route = state.routes.find(r => r.id === routeId);
+    const map = state.mapInstance;
+    
+    if (!route || !map || route.polygon.length === 0) return;
+    
+    // Create bounds from polygon points
+    const bounds = L.latLngBounds(
+      route.polygon.map(p => [p.lat, p.lng] as [number, number])
+    );
+    
+    // Fit bounds with some padding
+    map.fitBounds(bounds, {
+      padding: [50, 50],
+      maxZoom: 16,
+      animate: true,
+      duration: 0.5,
+    });
+  },
 }));
