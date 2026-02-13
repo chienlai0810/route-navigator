@@ -4,6 +4,7 @@ import "leaflet/dist/leaflet.css";
 import "@geoman-io/leaflet-geoman-free";
 import "@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css";
 import { useMapStore } from "@/hooks/useMapStore";
+import { PostOffice } from "@/types";
 
 // Fix for default marker icons (Leaflet expects image assets)
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -48,20 +49,21 @@ function createPostOfficeIcon() {
 
 interface MapViewProps {
   onPolygonCreated?: (polygon: Array<{ lat: number; lng: number }>, layer: L.Layer) => void;
+  postOffices?: PostOffice[];
 }
 
-export function MapView({ onPolygonCreated }: MapViewProps) {
+export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
   const {
     routes,
-    postOffices,
     selectedRouteId,
     setSelectedRoute,
     currentPolygon,
     activeTool,
-    addPolygonPoint,
     setActiveTool,
     updateRoute,
     setMapInstance,
+    resetAllPolygons,
+    saveOriginalPolygon,
   } = useMapStore();
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -97,6 +99,12 @@ export function MapView({ onPolygonCreated }: MapViewProps) {
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     }).addTo(map);
 
+    /*
+    L.tileLayer("https://tiles.viettelpost.vn/styles/vtp/style.json", {
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map);
+    */
     routeLayerRef.current = L.layerGroup().addTo(map);
     postOfficeLayerRef.current = L.layerGroup().addTo(map);
     drawingLayerRef.current = L.layerGroup().addTo(map);
@@ -322,11 +330,18 @@ export function MapView({ onPolygonCreated }: MapViewProps) {
       processedRouteIds.add(route.id);
       const isSelected = selectedRouteId === route.id;
       
+      // Save original polygon if not already saved
+      saveOriginalPolygon(route.id, route.polygon);
+      
       // Check if layer already exists
       let polygon = routeToLayerMap.current.get(route.id);
       
       if (polygon && routeLayer.hasLayer(polygon)) {
-        // Layer exists, just update style (not coordinates to preserve edits)
+        // Update polygon coordinates (important for reset functionality)
+        const newLatLngs = route.polygon.map((p) => [p.lat, p.lng] as [number, number]);
+        polygon.setLatLngs(newLatLngs);
+        
+        // Update style
         polygon.setStyle({
           color: route.color,
           fillColor: route.color,
@@ -402,10 +417,12 @@ export function MapView({ onPolygonCreated }: MapViewProps) {
 
     // Post offices
     const poIcon = createPostOfficeIcon();
-    postOffices.forEach((po) => {
-      const marker = L.marker([po.coordinates.lat, po.coordinates.lng], {
+    postOffices?.forEach((po) => {
+      const marker = L.marker([po.location.coordinates[1], po.location.coordinates[0]], {
         icon: poIcon,
       });
+
+      console.log('Adding post office marker:', marker);
 
       marker.bindTooltip(
         `<div style="font-size: 12px; line-height: 1.35;">
@@ -461,5 +478,50 @@ export function MapView({ onPolygonCreated }: MapViewProps) {
     }).addTo(drawingLayer);
   }, [activeTool, currentPolygon]);
 
-  return <div ref={containerRef} className="w-full h-full" />;
+  const handleResetPolygons = () => {
+    if (window.confirm('Bạn có chắc chắn muốn reset tất cả các polygon về trạng thái ban đầu?')) {
+      // Force re-render by incrementing reset counter
+      setResetCounter(prev => prev + 1);
+      // Reset all polygons in store
+      resetAllPolygons();
+      // Clear all layers and force re-create
+      const routeLayer = routeLayerRef.current;
+      if (routeLayer) {
+        routeLayer.clearLayers();
+      }
+      layerToRouteMap.current.clear();
+      routeToLayerMap.current.clear();
+    }
+  };
+
+  return (
+    <div className="relative w-full h-full">
+      <div ref={containerRef} className="w-full h-full" />
+      
+      {/* Reset Button */}
+      <button
+        onClick={handleResetPolygons}
+        className="absolute top-4 right-4 z-[1000] bg-background border-2 border-border hover:bg-accent hover:border-primary text-foreground px-4 py-2 rounded-lg shadow-lg transition-all flex items-center gap-2 font-medium"
+        title="Reset tất cả polygon về trạng thái ban đầu"
+      >
+        <svg 
+          xmlns="http://www.w3.org/2000/svg" 
+          width="18" 
+          height="18" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="2" 
+          strokeLinecap="round" 
+          strokeLinejoin="round"
+        >
+          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+          <path d="M21 3v5h-5"/>
+          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+          <path d="M8 16H3v5"/>
+        </svg>
+        Reset Polygons
+      </button>
+    </div>
+  );
 }

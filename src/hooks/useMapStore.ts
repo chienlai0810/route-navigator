@@ -9,6 +9,9 @@ interface MapState {
   selectedRouteId: string | null;
   selectedPostOfficeId: string | null;
   
+  // Original polygons for reset functionality
+  originalPolygons: Map<string, Array<{ lat: number; lng: number }>>;
+  
   // Drawing
   activeTool: DrawingTool;
   isDrawing: boolean;
@@ -49,99 +52,10 @@ interface MapState {
   updateSettings: (settings: Partial<Settings>) => void;
   setMapInstance: (map: L.Map | null) => void;
   zoomToRoute: (routeId: string) => void;
+  resetAllPolygons: () => void;
+  saveOriginalPolygon: (routeId: string, polygon: Array<{ lat: number; lng: number }>) => void;
 }
 
-// Mock data
-const mockPostOffices: PostOffice[] = [
-  {
-    id: 'po-1',
-    code: 'BC-HN01',
-    name: 'Bưu cục Hoàn Kiếm',
-    city: 'Hà Nội',
-    district: 'Hoàn Kiếm',
-    address: '15 Đinh Tiên Hoàng',
-    phone: '024 3825 1234',
-    status: 'active',
-    coordinates: { lat: 21.0285, lng: 105.8542 },
-  },
-  {
-    id: 'po-2',
-    code: 'BC-HN02',
-    name: 'Bưu cục Ba Đình',
-    city: 'Hà Nội',
-    district: 'Ba Đình',
-    address: '25 Liễu Giai',
-    phone: '024 3762 5678',
-    status: 'active',
-    coordinates: { lat: 21.0340, lng: 105.8180 },
-  },
-  {
-    id: 'po-3',
-    code: 'BC-HN03',
-    name: 'Bưu cục Cầu Giấy',
-    city: 'Hà Nội',
-    district: 'Cầu Giấy',
-    address: '88 Xuân Thủy',
-    phone: '024 3793 9012',
-    status: 'maintenance',
-    coordinates: { lat: 21.0380, lng: 105.7820 },
-  },
-  {
-    id: 'po-4',
-    code: 'BC-HN04',
-    name: 'Bưu cục Đống Đa',
-    city: 'Hà Nội',
-    district: 'Đống Đa',
-    address: '123 Xã Đàn',
-    phone: '024 3852 7890',
-    status: 'active',
-    coordinates: { lat: 21.0150, lng: 105.8280 },
-  },
-  {
-    id: 'po-5',
-    code: 'BC-HCM01',
-    name: 'Bưu cục Quận 1',
-    city: 'TP. Hồ Chí Minh',
-    district: 'Quận 1',
-    address: '125 Nguyễn Huệ',
-    phone: '028 3823 4567',
-    status: 'active',
-    coordinates: { lat: 10.7756, lng: 106.7019 },
-  },
-  {
-    id: 'po-6',
-    code: 'BC-HCM02',
-    name: 'Bưu cục Quận 3',
-    city: 'TP. Hồ Chí Minh',
-    district: 'Quận 3',
-    address: '45 Võ Văn Tần',
-    phone: '028 3930 5678',
-    status: 'active',
-    coordinates: { lat: 10.7824, lng: 106.6926 },
-  },
-  {
-    id: 'po-7',
-    code: 'BC-DN01',
-    name: 'Bưu cục Hải Châu',
-    city: 'Đà Nẵng',
-    district: 'Hải Châu',
-    address: '56 Lê Duẩn',
-    phone: '0236 3821 234',
-    status: 'active',
-    coordinates: { lat: 16.0544, lng: 108.2022 },
-  },
-  {
-    id: 'po-8',
-    code: 'BC-DN02',
-    name: 'Bưu cục Thanh Khê',
-    city: 'Đà Nẵng',
-    district: 'Thanh Khê',
-    address: '78 Nguyễn Văn Linh',
-    phone: '0236 3654 789',
-    status: 'maintenance',
-    coordinates: { lat: 16.0678, lng: 108.2070 },
-  },
-];
 
 const mockRoutes: Route[] = [
   {
@@ -206,9 +120,12 @@ const mockRoutes: Route[] = [
 export const useMapStore = create<MapState>((set, get) => ({
   // Initial Data
   routes: mockRoutes,
-  postOffices: mockPostOffices,
+  postOffices: [],
   selectedRouteId: null,
   selectedPostOfficeId: null,
+  
+  // Original polygons - initialize with current routes
+  originalPolygons: new Map(mockRoutes.map(r => [r.id, [...r.polygon]])),
   
   // Drawing State
   activeTool: null,
@@ -321,6 +238,51 @@ export const useMapStore = create<MapState>((set, get) => ({
       maxZoom: 16,
       animate: true,
       duration: 0.5,
+    });
+  },
+  
+  resetAllPolygons: () => {
+    const state = get();
+    set({
+      routes: state.routes.map((route) => {
+        const originalPolygon = state.originalPolygons.get(route.id);
+        if (originalPolygon) {
+          // Calculate area in m²
+          const calculateArea = (latlngs: Array<{ lat: number; lng: number }>) => {
+            if (latlngs.length < 3) return 0;
+            const R = 6371000;
+            let area = 0;
+            for (let i = 0; i < latlngs.length; i++) {
+              const j = (i + 1) % latlngs.length;
+              const lat1 = (latlngs[i].lat * Math.PI) / 180;
+              const lat2 = (latlngs[j].lat * Math.PI) / 180;
+              const lng1 = (latlngs[i].lng * Math.PI) / 180;
+              const lng2 = (latlngs[j].lng * Math.PI) / 180;
+              area += (lng2 - lng1) * (2 + Math.sin(lat1) + Math.sin(lat2));
+            }
+            return Math.abs((area * R * R) / 2);
+          };
+          
+          const areaM2 = calculateArea(originalPolygon);
+          return { 
+            ...route, 
+            polygon: [...originalPolygon],
+            area: areaM2,
+            updatedAt: new Date() 
+          };
+        }
+        return route;
+      }),
+    });
+  },
+  
+  saveOriginalPolygon: (routeId, polygon) => {
+    set((state) => {
+      const newOriginalPolygons = new Map(state.originalPolygons);
+      if (!newOriginalPolygons.has(routeId)) {
+        newOriginalPolygons.set(routeId, [...polygon]);
+      }
+      return { originalPolygons: newOriginalPolygons };
     });
   },
 }));

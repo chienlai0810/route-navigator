@@ -6,6 +6,8 @@ import { NewRouteDrawer } from '@/components/map/NewRouteDrawer';
 import { useMapStore } from '@/hooks/useMapStore';
 import L from 'leaflet';
 import { EditRoutePanel } from '@/components/map/EditRoutePanel';
+import { postOfficesApi } from '@/api/postOffices';
+import { useQuery } from '@tanstack/react-query';
 
 export default function MapPage() {
   const { selectedRouteId, showRoutePanel } = useMapStore();
@@ -13,6 +15,11 @@ export default function MapPage() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pendingPolygon, setPendingPolygon] = useState<Array<{ lat: number; lng: number }> | null>(null);
   const [pendingLayer, setPendingLayer] = useState<L.Layer | null>(null);
+
+  const { data: postOffices } = useQuery({
+    queryKey: ['post-offices'],
+    queryFn: () => postOfficesApi.getAll(),
+  });
 
   const handlePolygonCreated = useCallback((polygon: Array<{ lat: number; lng: number }>, layer: L.Layer) => {
     setPendingPolygon(polygon);
@@ -45,7 +52,7 @@ export default function MapPage() {
       {showRoutePanel && <RouteListPanel />}
 
       <div className="flex-1 relative">
-        <MapView onPolygonCreated={handlePolygonCreated} />
+        <MapView onPolygonCreated={handlePolygonCreated} postOffices={postOffices} />
 
         {/* Map Legend */}
         <div className="absolute bottom-6 left-6 z-[1000] bg-card/95 backdrop-blur-sm rounded-lg shadow-lg p-3 text-xs">

@@ -1,16 +1,41 @@
+export interface ApiResponse<T> {
+  success: boolean;
+  message: string;
+  data: T;
+  timestamp: string;
+}
+
+export interface GeoJsonPoint {
+  x: number; // longitude
+  y: number; // latitude
+  type: "Point";
+  coordinates: [number, number]; // [longitude, latitude]
+}
+
+export type PostOfficeStatus = "ACTIVE" | "INACTIVE" | "MAINTENANCE";
+
 export interface PostOffice {
   id: string;
   code: string;
   name: string;
-  city: string; // Tỉnh/Thành phố
-  district: string; // Quận/Huyện
   address: string;
   phone: string;
-  status: 'active' | 'maintenance';
-  coordinates: {
-    lat: number;
-    lng: number;
+  location: GeoJsonPoint;
+  status: PostOfficeStatus;
+  createdAt: string; // ISO date string
+  updatedAt: string; // ISO date string
+}
+
+export interface PostOfficePayload {
+  code: string;
+  name: string;
+  address: string;
+  phone: string;
+  location: {
+    type: "Point";
+    coordinates: [number, number]; // [longitude, latitude]
   };
+  status: PostOfficeStatus;
 }
 
 export type RouteType = 'delivery' | 'pickup' | 'all';
