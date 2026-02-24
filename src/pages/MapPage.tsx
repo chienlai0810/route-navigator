@@ -1,16 +1,17 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { MapView } from '@/components/map/MapView';
 import { RouteListPanel } from '@/components/map/RouteListPanel';
-import { RouteDetailPanel } from '@/components/map/RouteDetailPanel';
 import { NewRouteDrawer } from '@/components/map/NewRouteDrawer';
 import { useMapStore } from '@/hooks/useMapStore';
 import L from 'leaflet';
 import { EditRoutePanel } from '@/components/map/EditRoutePanel';
 import { postOfficesApi } from '@/api/postOffices';
+import { routesApi, RouteResponse } from '@/api/routes';
 import { useQuery } from '@tanstack/react-query';
+import { Route, RouteType } from '@/types';
 
 export default function MapPage() {
-  const { selectedRouteId, showRoutePanel } = useMapStore();
+  const { selectedRouteId, showRoutePanel, setSelectedRoute, addRoute, routes, settings } = useMapStore();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pendingPolygon, setPendingPolygon] = useState<Array<{ lat: number; lng: number }> | null>(null);
@@ -21,11 +22,85 @@ export default function MapPage() {
     queryFn: () => postOfficesApi.getAll(),
   });
 
+  // Fetch routes từ API
+  const { data: apiRoutes = [] } = useQuery({
+    queryKey: ['routes'],
+    queryFn: () => routesApi.getAll(),
+  });
+
+  // Sync routes từ API vào zustand store
+  useEffect(() => {
+    if (apiRoutes.length > 0) {
+      // Map API response to local Route format
+      apiRoutes.forEach((apiRoute: RouteResponse) => {
+        // Check if route already exists in store
+        const existingRoute = routes.find(r => r.id === apiRoute.id);
+        if (existingRoute) return; // Skip if already exists
+
+        // Map type from uppercase to lowercase
+        const localType = apiRoute.type.toLowerCase() as RouteType;
+        
+        // Compute area
+        const computeArea = (polygon: Array<{ lat: number; lng: number }>) => {
+          if (polygon.length < 3) return 0;
+          const R = 6371000;
+          let area = 0;
+          for (let i = 0; i < polygon.length; i++) {
+            const j = (i + 1) % polygon.length;
+            const lat1 = (polygon[i].lat * Math.PI) / 180;
+            const lat2 = (polygon[j].lat * Math.PI) / 180;
+            const lng1 = (polygon[i].lng * Math.PI) / 180;
+            const lng2 = (polygon[j].lng * Math.PI) / 180;
+            area += (lng2 - lng1) * (2 + Math.sin(lat1) + Math.sin(lat2));
+          }
+          return Math.abs((area * R * R) / 2);
+        };
+
+        const area = computeArea(apiRoute.area.coordinates);
+
+        // Create local route from API data
+        const localRoute: Route = {
+          id: apiRoute.id,
+          name: apiRoute.name,
+          code: apiRoute.code,
+          type: localType,
+          productType: apiRoute.productType,
+          color: apiRoute.color || settings.routeColors[localType],
+          postOfficeId: apiRoute.postOfficeId || (postOffices && postOffices[0]?.id) || '',
+          assignedEmployeeName: apiRoute.staffMain,
+          assignedEmployeeId: undefined,
+          polygon: apiRoute.area.coordinates,
+          area,
+          isVisible: true,
+          createdAt: new Date(apiRoute.createdAt),
+          updatedAt: new Date(apiRoute.updatedAt),
+        };
+
+        addRoute(localRoute);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiRoutes, settings, postOffices]);
+
+  // Đóng NewRouteDrawer khi EditRoutePanel mở
+  useEffect(() => {
+    if (selectedRouteId && drawerOpen) {
+      setDrawerOpen(false);
+      if (pendingLayer) {
+        (pendingLayer as any).remove?.();
+        setPendingLayer(null);
+      }
+      setPendingPolygon(null);
+    }
+  }, [selectedRouteId, drawerOpen, pendingLayer]);
+
   const handlePolygonCreated = useCallback((polygon: Array<{ lat: number; lng: number }>, layer: L.Layer) => {
+    // Đóng EditRoutePanel khi mở NewRouteDrawer
+    setSelectedRoute(null);
     setPendingPolygon(polygon);
     setPendingLayer(layer);
     setDrawerOpen(true);
-  }, []);
+  }, [setSelectedRoute]);
 
   const handleSaved = useCallback(() => {
     setDrawerOpen(false);

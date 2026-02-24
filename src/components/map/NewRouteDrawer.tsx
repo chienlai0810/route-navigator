@@ -1,7 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -9,9 +13,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { useMapStore } from '@/hooks/useMapStore';
 import { RouteType, Route } from '@/types';
-import { MapPin, Palette, X } from 'lucide-react';
+import { routesApi, CreateRoutePayload } from '@/api/routes';
+import { X, Loader2 } from 'lucide-react';
+import { routeTypeOptions, productTypeOptions } from '@/constants';
 
 interface NewRouteDrawerProps {
   open: boolean;
@@ -22,43 +36,65 @@ interface NewRouteDrawerProps {
   onCancelled: () => void;
 }
 
-const routeTypeOptions: { value: RouteType; label: string }[] = [
-  { value: 'delivery', label: 'Giao hàng' },
-  { value: 'pickup', label: 'Nhận hàng' },
-  { value: 'all', label: 'Tất cả' },
-];
+const formSchema = z.object({
+  name: z.string().min(1, 'Tên tuyến là bắt buộc'),
+  code: z.string().min(1, 'Mã tuyến là bắt buộc'),
+  type: z.enum(['delivery', 'pickup', 'all'] as const),
+  productType: z.enum(['HH', 'KH', 'TH'] as const, {
+    required_error: 'Loại hàng hóa là bắt buộc',
+  }),
+  employeeName: z.string().min(1, 'Nhân viên phụ trách là bắt buộc'),
+});
+
+type FormValues = z.infer<typeof formSchema>;
 
 export function NewRouteDrawer({
   open,
-  onOpenChange,
   pendingPolygon,
-  pendingLayer,
   onSaved,
   onCancelled,
 }: NewRouteDrawerProps) {
   const { postOffices, addRoute, settings } = useMapStore();
+  const queryClient = useQueryClient();
 
-  const [name, setName] = useState('');
-  const [type, setType] = useState<RouteType>('delivery');
-  const [postOfficeId, setPostOfficeId] = useState(postOffices[0]?.id ?? '');
-  const [color, setColor] = useState(settings.routeColors.delivery);
-  const [employeeName, setEmployeeName] = useState('');
+  // Mutation for creating route
+  const createMutation = useMutation({
+    mutationFn: (data: CreateRoutePayload) => routesApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['routes'] });
+      toast.success('Tạo tuyến mới thành công!');
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.message || 'Tạo tuyến thất bại!');
+    },
+  });
 
-  // Update color when type changes
-  useEffect(() => {
-    setColor(settings.routeColors[type]);
-  }, [type, settings.routeColors]);
+  const form = useForm<FormValues>({
+    resolver: zodResolver(formSchema),
+    mode: 'onChange',
+    defaultValues: {
+      name: '',
+      code: '',
+      type: 'delivery',
+      productType: 'HH',
+      employeeName: '',
+    },
+  });
 
-  // Reset form when drawer opens
+  const type = form.watch('type');
+
+  // Reset form when drawer opens/closes
   useEffect(() => {
     if (open) {
-      setName('');
-      setType('delivery');
-      setPostOfficeId(postOffices[0]?.id ?? '');
-      setColor(settings.routeColors.delivery);
-      setEmployeeName('');
+      form.reset({
+        name: '',
+        code: '',
+        type: 'delivery',
+        productType: 'HH',
+        employeeName: '',
+      });
     }
-  }, [open, postOffices, settings.routeColors]);
+  }, [open, form]);
 
   const computeArea = (polygon: Array<{ lat: number; lng: number }>) => {
     // Shoelace formula approximation in m²
@@ -76,27 +112,57 @@ export function NewRouteDrawer({
     return Math.abs((area * R * R) / 2);
   };
 
-  const handleSave = () => {
-    if (!pendingPolygon || !name.trim()) return;
+  const handleSave = async (values: FormValues) => {
+    if (!pendingPolygon) return;
 
     const area = computeArea(pendingPolygon);
-    const newRoute: Route = {
-      id: `route-${Date.now()}`,
-      name: name.trim(),
-      type,
-      color,
-      postOfficeId,
-      assignedEmployeeId: employeeName ? `emp-${Date.now()}` : undefined,
-      assignedEmployeeName: employeeName || undefined,
-      polygon: pendingPolygon,
-      area,
-      isVisible: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    const postOfficeId = postOffices[0]?.id ?? '';
+    const color = settings.routeColors[values.type];
+
+    // Map type to uppercase for API
+    const apiType = values.type.toUpperCase() as 'DELIVERY' | 'PICKUP' | 'ALL';
+
+    // Create payload for API
+    const payload: CreateRoutePayload = {
+      code: values.code.trim(),
+      name: values.name.trim(),
+      type: apiType,
+      productType: values.productType,
+      staffMain: values.employeeName.trim(),
+      area: {
+        type: 'Polygon',
+        coordinates: pendingPolygon,
+      },
     };
 
-    addRoute(newRoute);
-    onSaved();
+    try {
+      // Call API to create route
+      const apiResponse = await createMutation.mutateAsync(payload);
+
+      // Add route to local store with API response data
+      const newRoute: Route = {
+        id: apiResponse.id,
+        name: apiResponse.name,
+        code: apiResponse.code,
+        type: values.type,
+        productType: values.productType,
+        color,
+        postOfficeId,
+        assignedEmployeeId: `emp-${Date.now()}`,
+        assignedEmployeeName: apiResponse.staffMain,
+        polygon: apiResponse.area.coordinates,
+        area,
+        isVisible: true,
+        createdAt: apiResponse.createdAt ? new Date(apiResponse.createdAt) : new Date(),
+        updatedAt: apiResponse.updatedAt ? new Date(apiResponse.updatedAt) : new Date(),
+      };
+
+      addRoute(newRoute);
+      onSaved();
+    } catch (error) {
+      // Error already handled by mutation's onError
+      console.error('Failed to create route:', error);
+    }
   };
 
   const handleCancel = () => {
@@ -128,115 +194,136 @@ export function NewRouteDrawer({
       </div>
 
       {/* Form Content */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
-        {/* Route Name */}
-        <div className="space-y-2">
-          <Label htmlFor="route-name">Tên tuyến *</Label>
-          <Input
-            id="route-name"
-            placeholder="VD: Tuyến Hoàn Kiếm A3"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoFocus
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(handleSave)} className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
+          {/* Route Code */}
+          <FormField
+            control={form.control}
+            name="code"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Mã tuyến *</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="VD: T-HK-A3"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </div>
 
-        {/* Route Type */}
-        <div className="space-y-2">
-          <Label>Loại tuyến</Label>
-          <Select value={type} onValueChange={(v) => setType(v as RouteType)}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {routeTypeOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Post Office */}
-        <div className="space-y-2">
-          <Label>Bưu cục</Label>
-          <Select value={postOfficeId} onValueChange={setPostOfficeId}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {postOffices.map((po) => (
-                <SelectItem key={po.id} value={po.id}>
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-3.5 h-3.5 text-muted-foreground" />
-                    <span>{po.name}</span>
-                    <span className="text-muted-foreground text-xs">({po.code})</span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Color */}
-        <div className="space-y-2">
-          <Label>Màu tuyến</Label>
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-lg border border-border shrink-0"
-              style={{ backgroundColor: color }}
-            />
-            <Input
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              placeholder="hsl(142, 76%, 36%)"
-              className="flex-1"
-            />
-            <Palette className="w-4 h-4 text-muted-foreground shrink-0" />
-          </div>
-        </div>
-
-        {/* Employee */}
-        <div className="space-y-2">
-          <Label htmlFor="employee-name">Nhân viên phụ trách</Label>
-          <Input
-            id="employee-name"
-            placeholder="VD: Nguyễn Văn A"
-            value={employeeName}
-            onChange={(e) => setEmployeeName(e.target.value)}
+          {/* Route Name */}
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Tên tuyến *</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="VD: Tuyến Hoàn Kiếm A3"
+                    {...field}
+                    autoFocus
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
           />
-        </div>
 
-        {/* Area Info */}
-        <div className="p-3 bg-muted/50 rounded-lg space-y-1">
-          <p className="text-sm text-muted-foreground">Diện tích vùng vẽ</p>
-          <p className="font-semibold text-lg">
-            {(areaDisplay / 1_000_000).toFixed(2)} km²
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {areaDisplay.toLocaleString('vi-VN', { maximumFractionDigits: 0 })} m²
-          </p>
-        </div>
+          {/* Route Type */}
+          <FormField
+            control={form.control}
+            name="type"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Loại tuyến *</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {routeTypeOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
 
-        {/* Vertices */}
-        <div className="p-3 bg-muted/50 rounded-lg">
-          <p className="text-sm text-muted-foreground">Số đỉnh polygon</p>
-          <p className="font-medium">{pendingPolygon?.length ?? 0} đỉnh</p>
-        </div>
-      </div>
+          {/* Product Type */}
+          <FormField
+            control={form.control}
+            name="productType"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Loại hàng hóa *</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {productTypeOptions.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* Employee */}
+          <FormField
+            control={form.control}
+            name="employeeName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Nhân viên phụ trách *</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder="VD: Nguyễn Văn A"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </form>
+      </Form>
 
       {/* Footer */}
       <div className="p-4 border-t border-border bg-muted/30">
         <div className="flex gap-2">
-          <Button variant="outline" className="flex-1" onClick={handleCancel}>
+          <Button 
+            variant="outline" 
+            className="flex-1" 
+            onClick={handleCancel} 
+            type="button"
+            disabled={createMutation.isPending}
+          >
             Hủy
           </Button>
           <Button 
             className="flex-1 gradient-primary" 
-            onClick={handleSave} 
-            disabled={!name.trim()}
+            onClick={form.handleSubmit(handleSave)}
+            disabled={!form.formState.isValid || createMutation.isPending}
+            type="button"
           >
+            {createMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
             Lưu tuyến
           </Button>
         </div>

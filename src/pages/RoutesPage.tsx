@@ -9,12 +9,7 @@ import { useMapStore } from '@/hooks/useMapStore';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { RouteType } from '@/types';
-
-const routeTypeLabels: Record<RouteType, string> = {
-  delivery: 'Giao hàng',
-  pickup: 'Nhận hàng',
-  all: 'Tất cả',
-};
+import { routeTypeLabels } from '@/constants';
 
 // Simple point-in-polygon algorithm
 function isPointInPolygon(point: { lat: number; lng: number }, polygon: { lat: number; lng: number }[]) {

@@ -1,58 +1,82 @@
 import axiosInstance from "@/lib/axios";
+import { ApiResponse, ProductType } from "@/types";
 
-// Types cho Routes
-export interface Route {
+// Types cho API Routes
+export type RouteType = 'DELIVERY' | 'PICKUP' | 'ALL';
+
+export interface RouteCoordinate {
+  lat: number;
+  lng: number;
+}
+
+export interface RouteArea {
+  type: 'Polygon';
+  coordinates: RouteCoordinate[];
+}
+
+export interface RouteResponse {
   id: string;
+  code: string;
   name: string;
-  description?: string;
-  startPoint: {
-    lat: number;
-    lng: number;
-  };
-  endPoint: {
-    lat: number;
-    lng: number;
-  };
-  waypoints?: Array<{
-    lat: number;
-    lng: number;
-  }>;
-  distance?: number;
-  duration?: number;
-  status?: 'active' | 'inactive';
-  createdAt?: string;
-  updatedAt?: string;
+  type: RouteType;
+  productType: ProductType;
+  postOfficeId: string | null;
+  postOfficeName: string | null;
+  staffMain: string;
+  staffSub: string | null;
+  area: RouteArea;
+  color: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateRoutePayload {
+  code: string;
+  name: string;
+  type: RouteType;
+  productType: ProductType;
+  staffMain: string;
+  area: RouteArea;
+}
+
+export interface UpdateRoutePayload {
+  code?: string;
+  name?: string;
+  type?: RouteType;
+  productType?: ProductType;
+  staffMain?: string;
+  area?: RouteArea;
 }
 
 // API service cho Routes
 export const routesApi = {
   // Lấy danh sách tuyến đường
-  getAll: async () => {
-    const response = await axiosInstance.get<Route[]>('/routes');
-    return response.data;
+  getAll: async (): Promise<RouteResponse[]> => {
+    const response = await axiosInstance.get<ApiResponse<RouteResponse[]>>('/routes');
+    return response.data.data;
   },
 
   // Lấy thông tin một tuyến đường
-  getById: async (id: string) => {
-    const response = await axiosInstance.get<Route>(`/routes/${id}`);
-    return response.data;
+  getById: async (id: string): Promise<RouteResponse> => {
+    const response = await axiosInstance.get<ApiResponse<RouteResponse>>(`/routes/${id}`);
+    return response.data.data;
   },
 
   // Tạo tuyến đường mới
-  create: async (data: Omit<Route, 'id'>) => {
-    const response = await axiosInstance.post<Route>('/routes', data);
-    return response.data;
+  create: async (data: CreateRoutePayload): Promise<RouteResponse> => {
+    const response = await axiosInstance.post<ApiResponse<RouteResponse>>('/routes', data);
+    return response.data.data;
   },
 
   // Cập nhật thông tin tuyến đường
-  update: async (id: string, data: Partial<Route>) => {
-    const response = await axiosInstance.put<Route>(`/routes/${id}`, data);
-    return response.data;
+  update: async (id: string, data: UpdateRoutePayload): Promise<RouteResponse> => {
+    const response = await axiosInstance.put<ApiResponse<RouteResponse>>(`/routes/${id}`, data);
+    return response.data.data;
   },
 
   // Xóa tuyến đường
   delete: async (id: string) => {
-    const response = await axiosInstance.delete(`/routes/${id}`);
+    const response = await axiosInstance.delete<ApiResponse<void>>(`/routes/${id}`);
     return response.data;
   },
 };

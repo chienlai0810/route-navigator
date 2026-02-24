@@ -24,37 +24,6 @@ export function AppHeader() {
     <header className="h-16 bg-card border-b border-border px-6 flex items-center justify-between">
       {/* Left Section - Post Office Selector */}
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Bưu cục:</span>
-          <Select
-            value={selectedPostOfficeId || 'all'}
-            onValueChange={(value) => setSelectedPostOffice(value === 'all' ? null : value)}
-          >
-            <SelectTrigger className="w-[220px] bg-background">
-              <SelectValue placeholder="Tất cả bưu cục" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả bưu cục</SelectItem>
-              {postOffices.map((po) => (
-                <SelectItem key={po.id} value={po.id}>
-                  <div className="flex items-center gap-2">
-                    <span>{po.name}</span>
-                    <Badge
-                      variant={po.status === 'active' ? 'default' : 'secondary'}
-                      className={
-                        po.status === 'active'
-                          ? 'bg-status-active/15 text-status-active text-xs'
-                          : 'bg-status-maintenance/15 text-status-maintenance text-xs'
-                      }
-                    >
-                      {po.status === 'active' ? 'Hoạt động' : 'Bảo trì'}
-                    </Badge>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
       </div>
 
       {/* Right Section */}

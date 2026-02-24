@@ -3,18 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useMapStore } from '@/hooks/useMapStore';
 import { RouteType } from '@/types';
 import { cn } from '@/lib/utils';
-
-const routeTypeLabels: Record<RouteType, string> = {
-  delivery: 'Giao hàng',
-  pickup: 'Nhận hàng',
-  all: 'Tất cả',
-};
-
-const routeTypeColors: Record<RouteType, string> = {
-  delivery: 'route-badge-delivery',
-  pickup: 'route-badge-pickup',
-  all: 'route-badge-all',
-};
+import { routeTypeLabels, routeTypeColors } from '@/constants';
 
 export function RouteDetailPanel() {
   const { routes, selectedRouteId, setSelectedRoute, postOffices, setActiveTool, deleteRoute } = useMapStore();

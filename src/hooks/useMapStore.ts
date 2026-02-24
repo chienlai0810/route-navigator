@@ -8,6 +8,8 @@ interface MapState {
   postOffices: PostOffice[];
   selectedRouteId: string | null;
   selectedPostOfficeId: string | null;
+  editingRouteId: string | null;
+  editMode: 'vertices' | 'drag' | null;
   
   // Original polygons for reset functionality
   originalPolygons: Map<string, Array<{ lat: number; lng: number }>>;
@@ -35,6 +37,8 @@ interface MapState {
   setActiveTool: (tool: DrawingTool) => void;
   setSelectedRoute: (id: string | null, zoomTo?: boolean) => void;
   setSelectedPostOffice: (id: string | null) => void;
+  setEditingRouteId: (id: string | null) => void;
+  setEditMode: (mode: 'vertices' | 'drag' | null) => void;
   toggleRouteVisibility: (id: string) => void;
   addRoute: (route: Route) => void;
   updateRoute: (id: string, updates: Partial<Route>) => void;
@@ -54,6 +58,7 @@ interface MapState {
   zoomToRoute: (routeId: string) => void;
   resetAllPolygons: () => void;
   saveOriginalPolygon: (routeId: string, polygon: Array<{ lat: number; lng: number }>) => void;
+  revertPolygon: (routeId: string) => void;
 }
 
 
@@ -119,10 +124,12 @@ const mockRoutes: Route[] = [
 
 export const useMapStore = create<MapState>((set, get) => ({
   // Initial Data
-  routes: mockRoutes,
+  routes: [],
   postOffices: [],
   selectedRouteId: null,
   selectedPostOfficeId: null,
+  editingRouteId: null,
+  editMode: null,
   
   // Original polygons - initialize with current routes
   originalPolygons: new Map(mockRoutes.map(r => [r.id, [...r.polygon]])),
@@ -164,6 +171,10 @@ export const useMapStore = create<MapState>((set, get) => ({
   },
   
   setSelectedPostOffice: (id) => set({ selectedPostOfficeId: id }),
+  
+  setEditingRouteId: (id) => set({ editingRouteId: id }),
+  
+  setEditMode: (mode) => set({ editMode: mode }),
   
   toggleRouteVisibility: (id) =>
     set((state) => ({
@@ -283,6 +294,22 @@ export const useMapStore = create<MapState>((set, get) => ({
         newOriginalPolygons.set(routeId, [...polygon]);
       }
       return { originalPolygons: newOriginalPolygons };
+    });
+  },
+  
+  revertPolygon: (routeId) => {
+    set((state) => {
+      const originalPolygon = state.originalPolygons.get(routeId);
+      if (originalPolygon) {
+        return {
+          routes: state.routes.map((route) =>
+            route.id === routeId 
+              ? { ...route, polygon: [...originalPolygon] }
+              : route
+          ),
+        };
+      }
+      return state;
     });
   },
 }));

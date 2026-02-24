@@ -295,3 +295,7 @@
     font-size: 0.875rem !important;
     box-shadow: 0 4px 12px -2px hsl(var(--foreground) / 0.1) !important;
   }}
+
+  .leaflet-interactive {
+    outline: none !important;
+  }

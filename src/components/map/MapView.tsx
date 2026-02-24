@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "leaflet.gridlayer.googlemutant";
 import "@geoman-io/leaflet-geoman-free";
 import "@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css";
 import { useMapStore } from "@/hooks/useMapStore";
 import { PostOffice } from "@/types";
+import { routeTypeLabels } from "@/constants";
 
 // Fix for default marker icons (Leaflet expects image assets)
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -64,6 +66,8 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
     setMapInstance,
     resetAllPolygons,
     saveOriginalPolygon,
+    editingRouteId,
+    editMode,
   } = useMapStore();
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -117,16 +121,17 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
       map.pm.addControls({
         position: 'topleft',
         drawMarker: true,
-        drawCircleMarker: true,
-        drawPolyline: true,
-        drawRectangle: true,
+        drawCircleMarker: false,
+        drawText: false,
+        drawPolyline: false,
+        drawRectangle: false,
         drawPolygon: true,
-        drawCircle: true,
-        editMode: true,
-        dragMode: true,
-        cutPolygon: true,
-        removalMode: true,
-        rotateMode: true,
+        drawCircle: false,
+        editMode: false,
+        dragMode: false,
+        cutPolygon: false,
+        removalMode: false,
+        rotateMode: false,
         customControls: true,
       });
     });
@@ -262,8 +267,6 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
             polygon: coords.map(c => ({ lat: c.lat, lng: c.lng })),
             area: areaM2,
           });
-          
-          console.log('Route updated in store:', routeId, 'New area:', areaM2);
         }
       }
     };
@@ -354,7 +357,8 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
         polygon.bindTooltip(
           `<div style="font-size: 12px; line-height: 1.35;">
             <div style="font-weight: 600; margin-bottom: 2px;">${route.name}</div>
-            <div style="opacity: 0.8;">Diện tích: ${formatKm2(route.area)} km²</div>
+            <div style="opacity: 0.8;">Loại tuyến: ${routeTypeLabels[route.type]}</div>
+            ${route.productType ? `<div style="opacity: 0.8;">Loại hàng hóa: ${route.productType}</div>` : ""}
             ${route.assignedEmployeeName ? `<div style="opacity: 0.8;">NV: ${route.assignedEmployeeName}</div>` : ""}
           </div>`,
           { sticky: true }
@@ -377,7 +381,14 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
         layerToRouteMap.current.set(layerId, route.id);
         routeToLayerMap.current.set(route.id, polygon);
 
-        polygon.on("click", () => setSelectedRoute(route.id, true));
+        // polygon.on("click", () => setSelectedRoute(route.id, true));
+        polygon.on("dblclick", (e) => {
+          L.DomEvent.stopPropagation(e);
+          if (e.originalEvent) {
+            e.originalEvent.preventDefault();
+          }
+          setSelectedRoute(route.id, true);
+        });
       polygon.on("mouseover", () => {
         polygon.setStyle({ weight: 3, fillOpacity: 0.35 });
       });
@@ -392,7 +403,8 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
         polygon.bindTooltip(
           `<div style="font-size: 12px; line-height: 1.35;">
             <div style="font-weight: 600; margin-bottom: 2px;">${route.name}</div>
-            <div style="opacity: 0.8;">Diện tích: ${formatKm2(route.area)} km²</div>
+            <div style="opacity: 0.8;">Loại tuyến: ${routeTypeLabels[route.type]}</div>
+            ${route.productType ? `<div style="opacity: 0.8;">Loại hàng hóa: ${route.productType}</div>` : ""}
             ${route.assignedEmployeeName ? `<div style="opacity: 0.8;">NV: ${route.assignedEmployeeName}</div>` : ""}
           </div>`,
           { sticky: true }
@@ -421,8 +433,6 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
       const marker = L.marker([po.location.coordinates[1], po.location.coordinates[0]], {
         icon: poIcon,
       });
-
-      console.log('Adding post office marker:', marker);
 
       marker.bindTooltip(
         `<div style="font-size: 12px; line-height: 1.35;">
@@ -478,6 +488,82 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
     }).addTo(drawingLayer);
   }, [activeTool, currentPolygon]);
 
+  // Enable/disable polygon editing when editingRouteId or editMode changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Cleanup all polygons - remove listeners and disable all modes
+    routeToLayerMap.current.forEach((polygon) => {
+      if (polygon.pm) {
+        polygon.off('pm:edit');
+        polygon.off('pm:drag');
+        polygon.off('pm:dragstart');
+        polygon.off('pm:dragend');
+        polygon.pm.disable();
+        polygon.pm.disableLayerDrag();
+        const element = polygon.getElement();
+        if (element) {
+          (element as HTMLElement).style.cursor = '';
+        }
+      }
+    });
+
+    // Enable editing on the selected route if editingRouteId is set
+    if (editingRouteId && editMode) {
+      const polygon = routeToLayerMap.current.get(editingRouteId);
+      if (polygon && polygon.pm) {
+        
+        // Listen for edit events
+        const handleEdit = (e: any) => {
+          const layer = e.layer || e.target;
+          if (layer) {
+            const newLatLngs = layer.getLatLngs()[0];
+            const newPolygon = newLatLngs.map((latlng: L.LatLng) => ({
+              lat: latlng.lat,
+              lng: latlng.lng,
+            }));
+            // Update the route in store with new polygon
+            updateRoute(editingRouteId, { polygon: newPolygon });
+          }
+        };
+
+        if (editMode === 'vertices') {
+          // Enable vertex editing only
+          polygon.pm.enable({
+            allowSelfIntersection: false,
+            preventMarkerRemoval: true,
+            draggable: false,
+            snappable: true,
+            snapDistance: 20,
+            hideMiddleMarkers: false,
+          });
+          polygon.on('pm:edit', handleEdit);
+          const element = polygon.getElement();
+          if (element) {
+            (element as HTMLElement).style.cursor = 'default';
+          }
+        } else if (editMode === 'drag') {
+          // Enable dragging the entire polygon
+          polygon.pm.enable({
+            draggable: true,
+            snappable: true,
+            snapDistance: 20,
+            hideMiddleMarkers: true,
+          });
+          polygon.pm.enableLayerDrag();
+          polygon.on('pm:drag', handleEdit);
+          polygon.on('pm:dragstart', handleEdit);
+          polygon.on('pm:dragend', handleEdit);
+          const element = polygon.getElement();
+          if (element) {
+            (element as HTMLElement).style.cursor = 'move';
+          }
+        }
+      }
+    }
+  }, [editingRouteId, editMode, updateRoute]);
+
   const handleResetPolygons = () => {
     if (window.confirm('Bạn có chắc chắn muốn reset tất cả các polygon về trạng thái ban đầu?')) {
       // Force re-render by incrementing reset counter
@@ -499,7 +585,7 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
       <div ref={containerRef} className="w-full h-full" />
       
       {/* Reset Button */}
-      <button
+      {/* <button
         onClick={handleResetPolygons}
         className="absolute top-4 right-4 z-[1000] bg-background border-2 border-border hover:bg-accent hover:border-primary text-foreground px-4 py-2 rounded-lg shadow-lg transition-all flex items-center gap-2 font-medium"
         title="Reset tất cả polygon về trạng thái ban đầu"
@@ -521,7 +607,7 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
           <path d="M8 16H3v5"/>
         </svg>
         Reset Polygons
-      </button>
+      </button> */}
     </div>
   );
 }

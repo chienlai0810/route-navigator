@@ -5,5 +5,3 @@ export { postOfficesApi } from './postOffices';
 
 // Export types
 export type { Employee } from './employees';
-export type { Route } from './routes';
-export type { PostOffice } from './postOffices';

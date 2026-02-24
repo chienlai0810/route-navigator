@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useMapStore } from '@/hooks/useMapStore';
-import { RouteType } from '@/types';
+import { RouteType, Route } from '@/types';
 import {
   Select,
   SelectContent,
@@ -18,19 +18,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useState } from 'react';
-import { Search, Filter, Plus } from 'lucide-react';
-
-const routeTypeLabels: Record<RouteType, string> = {
-  delivery: 'Giao hàng',
-  pickup: 'Nhận hàng',
-  all: 'Tất cả',
-};
-
-const routeTypeColors: Record<RouteType, string> = {
-  delivery: 'route-badge-delivery',
-  pickup: 'route-badge-pickup',
-  all: 'route-badge-all',
-};
+import { Search, Filter } from 'lucide-react';
+import { DeleteRouteModal } from '../routes';
+import { routeTypeLabels, routeTypeColors } from '@/constants';
 
 export function RouteListPanel() {
   const {
@@ -41,33 +31,20 @@ export function RouteListPanel() {
     toggleRouteVisibility,
     filterPostOfficeId,
     filterRouteType,
-    filterCity,
-    filterDistrict,
     setFilterPostOfficeId,
     setFilterRouteType,
-    setFilterCity,
-    setFilterDistrict,
-    deleteRoute,
   } = useMapStore();
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [routeToDelete, setRouteToDelete] = useState<Route | null>(null);
 
   const filteredRoutes = routes.filter((route) => {
-    const postOffice = postOffices.find(po => po.id === route.postOfficeId);
-    
-    if (filterCity && postOffice?.city !== filterCity) return false;
-    if (filterDistrict && postOffice?.district !== filterDistrict) return false;
     if (filterPostOfficeId && route.postOfficeId !== filterPostOfficeId) return false;
     if (filterRouteType && route.type !== filterRouteType) return false;
     if (searchTerm && !route.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
     return true;
   });
-
-  // Get unique cities and districts
-  const cities = Array.from(new Set(postOffices.map(po => po.city))).sort();
-  const districts = filterCity 
-    ? Array.from(new Set(postOffices.filter(po => po.city === filterCity).map(po => po.district))).sort()
-    : [];
 
   return (
     <div className="w-80 bg-card border-r border-border flex flex-col h-full">
@@ -94,44 +71,6 @@ export function RouteListPanel() {
 
         {/* Filters */}
         <div className="space-y-2">
-          {/* City and District Filters */}
-          <div className="flex gap-2">
-            <Select
-              value={filterCity || 'all'}
-              onValueChange={(v) => setFilterCity(v === 'all' ? null : v)}
-            >
-              <SelectTrigger className="flex-1 h-9">
-                <SelectValue placeholder="Tỉnh/TP" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả tỉnh/TP</SelectItem>
-                {cities.map((city) => (
-                  <SelectItem key={city} value={city}>
-                    {city}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Select
-              value={filterDistrict || 'all'}
-              onValueChange={(v) => setFilterDistrict(v === 'all' ? null : v)}
-              disabled={!filterCity}
-            >
-              <SelectTrigger className="flex-1 h-9">
-                <SelectValue placeholder="Quận/Huyện" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Tất cả Q/H</SelectItem>
-                {districts.map((district) => (
-                  <SelectItem key={district} value={district}>
-                    {district}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
           {/* Post Office and Route Type Filters */}
           <div className="flex gap-2">
             <Select
@@ -143,14 +82,11 @@ export function RouteListPanel() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">Tất cả BC</SelectItem>
-                {postOffices
-                  .filter(po => !filterCity || po.city === filterCity)
-                  .filter(po => !filterDistrict || po.district === filterDistrict)
-                  .map((po) => (
-                    <SelectItem key={po.id} value={po.id}>
-                      {po.code}
-                    </SelectItem>
-                  ))}
+                {postOffices.map((po) => (
+                  <SelectItem key={po.id} value={po.id}>
+                    {po.code}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
@@ -174,7 +110,6 @@ export function RouteListPanel() {
       {/* Route List */}
       <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
         {filteredRoutes.map((route) => {
-          const postOffice = postOffices.find((po) => po.id === route.postOfficeId);
           const isSelected = selectedRouteId === route.id;
 
           return (
@@ -201,7 +136,9 @@ export function RouteListPanel() {
                     <span className={cn('route-badge', routeTypeColors[route.type])}>
                       {routeTypeLabels[route.type]}
                     </span>
-                    <span className="text-xs text-muted-foreground">{postOffice?.code}</span>
+                   <span className={cn('route-badge', 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300')}>
+                        {route.productType}
+                      </span>
                   </div>
                 </div>
 
@@ -242,7 +179,8 @@ export function RouteListPanel() {
                         className="text-destructive"
                         onClick={(e) => {
                           e.stopPropagation();
-                          deleteRoute(route.id);
+                          setRouteToDelete(route);
+                          setDeleteModalOpen(true);
                         }}
                       >
                         <Trash2 className="w-4 h-4 mr-2" />
@@ -260,11 +198,6 @@ export function RouteListPanel() {
                   <span>{route.assignedEmployeeName}</span>
                 </div>
               )}
-
-              {/* Area */}
-              <div className="text-xs text-muted-foreground mt-1">
-                Diện tích: {(route.area / 1000).toFixed(1)} km²
-              </div>
             </div>
           );
         })}
@@ -284,6 +217,13 @@ export function RouteListPanel() {
           <span>Hiển thị: {filteredRoutes.filter((r) => r.isVisible).length}</span>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <DeleteRouteModal
+        route={routeToDelete}
+        open={deleteModalOpen}
+        onOpenChange={setDeleteModalOpen}
+      />
     </div>
   );
 }

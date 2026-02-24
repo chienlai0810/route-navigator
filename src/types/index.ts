@@ -40,10 +40,14 @@ export interface PostOfficePayload {
 
 export type RouteType = 'delivery' | 'pickup' | 'all';
 
+export type ProductType = 'HH' | 'KH' | 'TH';
+
 export interface Route {
   id: string;
   name: string;
+  code?: string;
   type: RouteType;
+  productType?: ProductType;
   color: string;
   postOfficeId: string;
   assignedEmployeeId?: string;
