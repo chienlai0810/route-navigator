@@ -58,13 +58,18 @@ export default function MapPage() {
 
         const area = computeArea(apiRoute.area.coordinates);
 
+        // Parse productType from string format "HH;TH" to array
+        const productTypeArray: ('HH' | 'KH' | 'TH')[] = apiRoute.productType 
+          ? apiRoute.productType.split(';').filter(Boolean) as ('HH' | 'KH' | 'TH')[]
+          : [];
+
         // Create local route from API data
         const localRoute: Route = {
           id: apiRoute.id,
           name: apiRoute.name,
           code: apiRoute.code,
           type: localType,
-          productType: apiRoute.productType,
+          productType: productTypeArray,
           color: apiRoute.color || settings.routeColors[localType],
           postOfficeId: apiRoute.postOfficeId || (postOffices && postOffices[0]?.id) || '',
           assignedEmployeeName: apiRoute.staffMain,

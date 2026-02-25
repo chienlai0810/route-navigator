@@ -47,7 +47,7 @@ export interface Route {
   name: string;
   code?: string;
   type: RouteType;
-  productType?: ProductType;
+  productType?: ProductType[];
   color: string;
   postOfficeId: string;
   assignedEmployeeId?: string;

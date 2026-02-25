@@ -358,7 +358,7 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
           `<div style="font-size: 12px; line-height: 1.35;">
             <div style="font-weight: 600; margin-bottom: 2px;">${route.name}</div>
             <div style="opacity: 0.8;">Loại tuyến: ${routeTypeLabels[route.type]}</div>
-            ${route.productType ? `<div style="opacity: 0.8;">Loại hàng hóa: ${route.productType}</div>` : ""}
+            ${route.productType && route.productType.length > 0 ? `<div style="opacity: 0.8;">Loại hàng hóa: ${route.productType.join(', ')}</div>` : ""}
             ${route.assignedEmployeeName ? `<div style="opacity: 0.8;">NV: ${route.assignedEmployeeName}</div>` : ""}
           </div>`,
           { sticky: true }
@@ -404,7 +404,7 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
           `<div style="font-size: 12px; line-height: 1.35;">
             <div style="font-weight: 600; margin-bottom: 2px;">${route.name}</div>
             <div style="opacity: 0.8;">Loại tuyến: ${routeTypeLabels[route.type]}</div>
-            ${route.productType ? `<div style="opacity: 0.8;">Loại hàng hóa: ${route.productType}</div>` : ""}
+            ${route.productType && route.productType.length > 0 ? `<div style="opacity: 0.8;">Loại hàng hóa: ${route.productType.join(', ')}</div>` : ""}
             ${route.assignedEmployeeName ? `<div style="opacity: 0.8;">NV: ${route.assignedEmployeeName}</div>` : ""}
           </div>`,
           { sticky: true }

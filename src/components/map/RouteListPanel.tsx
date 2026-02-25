@@ -136,9 +136,11 @@ export function RouteListPanel() {
                     <span className={cn('route-badge', routeTypeColors[route.type])}>
                       {routeTypeLabels[route.type]}
                     </span>
-                   <span className={cn('route-badge', 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300')}>
-                        {route.productType}
+                    {route.productType && route.productType.length > 0 && (
+                      <span className={cn('route-badge', 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300')}>
+                        {route.productType.join(', ')}
                       </span>
+                    )}
                   </div>
                 </div>
 

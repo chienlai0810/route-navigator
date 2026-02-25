@@ -19,7 +19,7 @@ export interface RouteResponse {
   code: string;
   name: string;
   type: RouteType;
-  productType: ProductType;
+  productType: string; // Format: "HH;TH" or single value "HH"
   postOfficeId: string | null;
   postOfficeName: string | null;
   staffMain: string;
@@ -34,7 +34,7 @@ export interface CreateRoutePayload {
   code: string;
   name: string;
   type: RouteType;
-  productType: ProductType;
+  productType: string; // Format: "HH;TH" or single value "HH"
   staffMain: string;
   area: RouteArea;
 }
@@ -43,7 +43,7 @@ export interface UpdateRoutePayload {
   code?: string;
   name?: string;
   type?: RouteType;
-  productType?: ProductType;
+  productType?: string; // Format: "HH;TH" or single value "HH"
   staffMain?: string;
   area?: RouteArea;
 }

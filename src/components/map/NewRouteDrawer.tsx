@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import {
   Form,
   FormControl,
@@ -40,9 +41,7 @@ const formSchema = z.object({
   name: z.string().min(1, 'Tên tuyến là bắt buộc'),
   code: z.string().min(1, 'Mã tuyến là bắt buộc'),
   type: z.enum(['delivery', 'pickup', 'all'] as const),
-  productType: z.enum(['HH', 'KH', 'TH'] as const, {
-    required_error: 'Loại hàng hóa là bắt buộc',
-  }),
+  productType: z.array(z.enum(['HH', 'KH', 'TH'] as const)).min(1, 'Chọn ít nhất một loại hàng hóa'),
   employeeName: z.string().min(1, 'Nhân viên phụ trách là bắt buộc'),
 });
 
@@ -76,7 +75,7 @@ export function NewRouteDrawer({
       name: '',
       code: '',
       type: 'delivery',
-      productType: 'HH',
+      productType: [],
       employeeName: '',
     },
   });
@@ -90,7 +89,7 @@ export function NewRouteDrawer({
         name: '',
         code: '',
         type: 'delivery',
-        productType: 'HH',
+        productType: [],
         employeeName: '',
       });
     }
@@ -122,12 +121,15 @@ export function NewRouteDrawer({
     // Map type to uppercase for API
     const apiType = values.type.toUpperCase() as 'DELIVERY' | 'PICKUP' | 'ALL';
 
+    // Convert productType array to semicolon-separated string
+    const productTypeString = values.productType.join(';');
+
     // Create payload for API
     const payload: CreateRoutePayload = {
       code: values.code.trim(),
       name: values.name.trim(),
       type: apiType,
-      productType: values.productType,
+      productType: productTypeString,
       staffMain: values.employeeName.trim(),
       area: {
         type: 'Polygon',
@@ -139,13 +141,18 @@ export function NewRouteDrawer({
       // Call API to create route
       const apiResponse = await createMutation.mutateAsync(payload);
 
+      // Parse productType from API response
+      const productTypeArray: ('HH' | 'KH' | 'TH')[] = apiResponse.productType 
+        ? apiResponse.productType.split(';').filter(Boolean) as ('HH' | 'KH' | 'TH')[]
+        : [];
+
       // Add route to local store with API response data
       const newRoute: Route = {
         id: apiResponse.id,
         name: apiResponse.name,
         code: apiResponse.code,
         type: values.type,
-        productType: values.productType,
+        productType: productTypeArray,
         color,
         postOfficeId,
         assignedEmployeeId: `emp-${Date.now()}`,
@@ -266,20 +273,14 @@ export function NewRouteDrawer({
             render={({ field }) => (
               <FormItem>
                 <FormLabel>Loại hàng hóa *</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    {productTypeOptions.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FormControl>
+                  <MultiSelect
+                    options={productTypeOptions}
+                    selected={field.value || []}
+                    onChange={field.onChange}
+                    placeholder="Chọn loại hàng hóa"
+                  />
+                </FormControl>
                 <FormMessage />
               </FormItem>
             )}

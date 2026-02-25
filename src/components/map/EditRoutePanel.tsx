@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { MultiSelect } from '@/components/ui/multi-select';
 import {
   Form,
   FormControl,
@@ -32,9 +33,7 @@ const formSchema = z.object({
   name: z.string().min(1, 'Tên tuyến là bắt buộc'),
   code: z.string().min(1, 'Mã tuyến là bắt buộc'),
   type: z.enum(['delivery', 'pickup', 'all'] as const),
-  productType: z.enum(['HH', 'KH', 'TH'] as const, {
-    required_error: 'Loại hàng hóa là bắt buộc',
-  }),
+  productType: z.array(z.enum(['HH', 'KH', 'TH'] as const)).min(1, 'Chọn ít nhất một loại hàng hóa'),
   employeeName: z.string().min(1, 'Nhân viên phụ trách là bắt buộc'),
 });
 
@@ -80,7 +79,7 @@ export function EditRoutePanel() {
       name: '',
       code: '',
       type: 'delivery',
-      productType: 'HH',
+      productType: [],
       employeeName: '',
     },
   });
@@ -92,7 +91,7 @@ export function EditRoutePanel() {
         name: route.name,
         code: route.code || '',
         type: route.type,
-        productType: route.productType || 'HH',
+        productType: route.productType || [],
         employeeName: route.assignedEmployeeName || '',
       });
     }
@@ -151,7 +150,7 @@ export function EditRoutePanel() {
         name: route.name,
         code: route.code || '',
         type: route.type,
-        productType: route.productType || 'HH',
+        productType: route.productType || [],
         employeeName: route.assignedEmployeeName || '',
       });
     }
@@ -167,12 +166,15 @@ export function EditRoutePanel() {
     // Map type to uppercase for API
     const apiType = values.type.toUpperCase() as 'DELIVERY' | 'PICKUP' | 'ALL';
 
+    // Convert productType array to semicolon-separated string
+    const productTypeString = values.productType.join(';');
+
     // Create payload for API with current polygon data
     const payload: UpdateRoutePayload = {
       code: values.code.trim(),
       name: values.name.trim(),
       type: apiType,
-      productType: values.productType,
+      productType: productTypeString,
       staffMain: values.employeeName.trim(),
       area: {
         type: 'Polygon',
@@ -336,20 +338,14 @@ export function EditRoutePanel() {
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Loại hàng hóa *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {productTypeOptions.map((opt) => (
-                          <SelectItem key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <FormControl>
+                      <MultiSelect
+                        options={productTypeOptions}
+                        selected={field.value || []}
+                        onChange={field.onChange}
+                        placeholder="Chọn loại hàng hóa"
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -396,11 +392,11 @@ export function EditRoutePanel() {
                     {routeTypeLabels[route.type]}
                   </span>
                 </div>
-                {route.productType && (
+                {route.productType && route.productType.length > 0 && (
                   <div className="flex items-center gap-2">
                     <span className="text-sm text-muted-foreground">Loại hàng hóa:</span>
                     <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300">
-                      {route.productType}
+                      {route.productType.join(', ')}
                     </span>
                   </div>
                 )}
