@@ -75,12 +75,17 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
   const routeLayerRef = useRef<L.LayerGroup | null>(null);
   const postOfficeLayerRef = useRef<L.LayerGroup | null>(null);
   const drawingLayerRef = useRef<L.LayerGroup | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
   // Track layer-to-route mapping
   const layerToRouteMap = useRef<Map<number, string>>(new Map());
   const routeToLayerMap = useRef<Map<string, L.Polygon>>(new Map());
   
   // Reset counter to force re-render when reset button is clicked
   const [resetCounter, setResetCounter] = useState(0);
+  
+  // Map layer type state
+  const [layerType, setLayerType] = useState<'roadmap' | 'satellite' | 'hybrid' | 'terrain'>('roadmap');
+  const [showLayerMenu, setShowLayerMenu] = useState(false);
 
   const visibleRoutes = useMemo(
     () => routes.filter((r) => r.isVisible),
@@ -98,17 +103,17 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
       doubleClickZoom: true,
     }).setView([21.0285, 105.8542], 14);
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).addTo(map);
+    // L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    //   attribution:
+    //     '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    // }).addTo(map);
 
-    /*
-    L.tileLayer("https://tiles.viettelpost.vn/styles/vtp/style.json", {
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    const initialTileLayer = L.tileLayer("https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}", {
+      attribution: '&copy; Google Maps',
     }).addTo(map);
-    */
+    
+    tileLayerRef.current = initialTileLayer;
+
     routeLayerRef.current = L.layerGroup().addTo(map);
     postOfficeLayerRef.current = L.layerGroup().addTo(map);
     drawingLayerRef.current = L.layerGroup().addTo(map);
@@ -142,6 +147,39 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
       mapRef.current = null;
     };
   }, [setMapInstance]);
+
+  // Handle layer type change
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !tileLayerRef.current) return;
+
+    // Remove current tile layer
+    map.removeLayer(tileLayerRef.current);
+
+    // Add new tile layer based on type
+    let lyrsParam = 'm'; // default roadmap
+    switch (layerType) {
+      case 'satellite':
+        lyrsParam = 's';
+        break;
+      case 'hybrid':
+        lyrsParam = 'y';
+        break;
+      case 'terrain':
+        lyrsParam = 'p';
+        break;
+      case 'roadmap':
+      default:
+        lyrsParam = 'm';
+        break;
+    }
+
+    const newTileLayer = L.tileLayer(`https://mt1.google.com/vt/lyrs=${lyrsParam}&x={x}&y={y}&z={z}`, {
+      attribution: '&copy; Google Maps',
+    }).addTo(map);
+
+    tileLayerRef.current = newTileLayer;
+  }, [layerType]);
 
   // 2) Cursor + interaction mode with Geoman integration
   useEffect(() => {
@@ -580,9 +618,62 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
     }
   };
 
+  const layerOptions = [
+    { value: 'roadmap' as const, label: 'Bản đồ', icon: '🗺️' },
+    { value: 'satellite' as const, label: 'Vệ tinh', icon: '🛰️' },
+    { value: 'hybrid' as const, label: 'Hybrid', icon: '🌍' },
+    { value: 'terrain' as const, label: 'Địa hình', icon: '⛰️' },
+  ];
+
+  const currentLayer = layerOptions.find(opt => opt.value === layerType);
+
   return (
     <div className="relative w-full h-full">
       <div ref={containerRef} className="w-full h-full" />
+      
+      {/* Layer Switcher */}
+      <div className="absolute top-4 right-4 z-[1000]">
+        <div className="relative">
+          <button
+            onClick={() => setShowLayerMenu(!showLayerMenu)}
+            className="bg-background border-2 border-border hover:bg-accent hover:border-primary text-foreground px-4 py-2 rounded-lg shadow-lg transition-all flex items-center gap-2 font-medium min-w-[140px] justify-between"
+            title="Chuyển đổi loại bản đồ"
+          >
+            <span className="flex items-center gap-2">
+              <span>{currentLayer?.icon}</span>
+              <span>{currentLayer?.label}</span>
+            </span>
+            <svg 
+              className={`w-4 h-4 transition-transform ${showLayerMenu ? 'rotate-180' : ''}`}
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {showLayerMenu && (
+            <div className="absolute top-full mt-2 right-0 bg-background border-2 border-border rounded-lg shadow-xl overflow-hidden min-w-[140px]">
+              {layerOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => {
+                    setLayerType(option.value);
+                    setShowLayerMenu(false);
+                  }}
+                  className={`w-full px-4 py-2 text-left hover:bg-accent transition-colors flex items-center gap-2 ${
+                    layerType === option.value ? 'bg-accent/50 font-semibold' : ''
+                  }`}
+                >
+                  <span>{option.icon}</span>
+                  <span>{option.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
       
       {/* Reset Button */}
       {/* <button
