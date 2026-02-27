@@ -28,8 +28,6 @@ export default function MapPage() {
     queryFn: () => routesApi.getAll(),
   });
 
-  console.log('settings in MapPage:', settings);
-
   // Sync routes từ API vào zustand store
   useEffect(() => {
     if (apiRoutes.length > 0) {
@@ -141,15 +139,24 @@ export default function MapPage() {
           <p className="font-medium mb-2 text-foreground">Chú thích</p>
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-[hsl(var(--route-delivery))]" />
+              <div 
+                className="w-3 h-3 rounded-full" 
+                style={{ backgroundColor: settings.routeColors.delivery }}
+              />
               <span className="text-muted-foreground">Giao hàng</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-[hsl(var(--route-pickup))]" />
+              <div 
+                className="w-3 h-3 rounded-full" 
+                style={{ backgroundColor: settings.routeColors.pickup }}
+              />
               <span className="text-muted-foreground">Nhận hàng</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-[hsl(var(--route-all))]" />
+              <div 
+                className="w-3 h-3 rounded-full" 
+                style={{ backgroundColor: settings.routeColors.all }}
+              />
               <span className="text-muted-foreground">Tất cả</span>
             </div>
           </div>

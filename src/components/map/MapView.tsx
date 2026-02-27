@@ -74,9 +74,7 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
   // Track layer-to-route mapping
   const layerToRouteMap = useRef<Map<number, string>>(new Map());
   const routeToLayerMap = useRef<Map<string, L.Polygon>>(new Map());
-  
-  // Reset counter to force re-render when reset button is clicked
-  const [resetCounter, setResetCounter] = useState(0);
+
   
   // Map layer type state
   const [layerType, setLayerType] = useState<'roadmap' | 'satellite' | 'hybrid' | 'terrain'>('roadmap');
@@ -451,7 +449,7 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
 
       marker.addTo(postOfficeLayer);
     });
-  }, [postOffices, visibleRoutes, selectedRouteId, setSelectedRoute, resetCounter]);
+  }, [postOffices, visibleRoutes, selectedRouteId, setSelectedRoute]);
 
   // 5) Render current drawing polygon (legacy click-based drawing only)
   // Note: This effect is for the legacy drawing system. Geoman shapes are managed separately.
