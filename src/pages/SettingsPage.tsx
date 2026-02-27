@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Palette, Ruler, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,19 +13,56 @@ import {
 } from '@/components/ui/select';
 import { useMapStore } from '@/hooks/useMapStore';
 import { toast } from 'sonner';
+import { 
+  useSystemConfig, 
+  useUpdateSystemConfig, 
+  transformSettingsToApi 
+} from '@/hooks/useSystemConfig';
 
 export default function SettingsPage() {
-  const { settings, updateSettings } = useMapStore();
+  const { settings } = useMapStore();
   const [localSettings, setLocalSettings] = useState(settings);
+  
+  // Sử dụng TanStack Query
+  const { isLoading: isFetching, error } = useSystemConfig();
+  const updateMutation = useUpdateSystemConfig();
 
-  const handleSave = () => {
-    updateSettings(localSettings);
-    toast.success('Đã lưu cài đặt thành công!');
+  // Sync localSettings với settings từ store
+  useEffect(() => {
+    setLocalSettings(settings);
+  }, [settings]);
+
+  // Hiển thị lỗi nếu có
+  useEffect(() => {
+    if (error) {
+      toast.error('Không thể tải cấu hình hệ thống');
+    }
+  }, [error]);
+
+  const handleSave = async () => {
+    const payload = transformSettingsToApi(localSettings);
+    
+    updateMutation.mutate(payload, {
+      onSuccess: () => {
+        toast.success('Đã lưu cài đặt thành công!');
+      },
+      onError: () => {
+        toast.error('Không thể lưu cài đặt. Vui lòng thử lại!');
+      },
+    });
   };
 
   return (
     <div className="h-full p-6 overflow-auto">
-      <div className="max-w-3xl mx-auto space-y-6">
+      {isFetching ? (
+        <div className="flex items-center justify-center h-full">
+          <div className="text-center space-y-3">
+            <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-muted-foreground">Đang tải cấu hình...</p>
+          </div>
+        </div>
+      ) : (
+        <div className="max-w-3xl mx-auto space-y-6">
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold">Thiết lập Tham số</h1>
@@ -221,12 +258,26 @@ export default function SettingsPage() {
 
         {/* Save Button */}
         <div className="flex justify-end">
-          <Button onClick={handleSave} className="gradient-primary text-primary-foreground">
-            <Save className="w-4 h-4 mr-2" />
-            Lưu cài đặt
+          <Button 
+            onClick={handleSave} 
+            disabled={updateMutation.isPending || isFetching}
+            className="gradient-primary text-primary-foreground"
+          >
+            {updateMutation.isPending ? (
+              <>
+                <div className="w-4 h-4 mr-2 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                Đang lưu...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4 mr-2" />
+                Lưu cài đặt
+              </>
+            )}
           </Button>
         </div>
       </div>
+      )}
     </div>
   );
 }

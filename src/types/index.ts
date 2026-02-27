@@ -79,6 +79,29 @@ export interface Settings {
   };
 }
 
+export interface SystemConfig {
+  id: string;
+  antiConflictThreshold: number;
+  antiConflictUnit: string;
+  routeColors: {
+    ALL: string;
+    PICKUP: string;
+    DELIVERY: string;
+  };
+  lastUpdated: string;
+  updatedBy: string;
+}
+
+export interface SystemConfigPayload {
+  antiConflictThreshold: number;
+  antiConflictUnit: string;
+  routeColors: {
+    ALL: string;
+    PICKUP: string;
+    DELIVERY: string;
+  };
+}
+
 export interface Order {
   id: string;
   address: string;

@@ -28,6 +28,8 @@ export default function MapPage() {
     queryFn: () => routesApi.getAll(),
   });
 
+  console.log('settings in MapPage:', settings);
+
   // Sync routes từ API vào zustand store
   useEffect(() => {
     if (apiRoutes.length > 0) {

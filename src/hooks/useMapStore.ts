@@ -54,6 +54,7 @@ interface MapState {
   addPolygonPoint: (point: { lat: number; lng: number }) => void;
   clearCurrentPolygon: () => void;
   updateSettings: (settings: Partial<Settings>) => void;
+  syncRouteColorsWithSettings: () => void;
   setMapInstance: (map: L.Map | null) => void;
   zoomToRoute: (routeId: string) => void;
   resetAllPolygons: () => void;
@@ -228,6 +229,14 @@ export const useMapStore = create<MapState>((set, get) => ({
   
   updateSettings: (newSettings) =>
     set((state) => ({ settings: { ...state.settings, ...newSettings } })),
+  
+  syncRouteColorsWithSettings: () =>
+    set((state) => ({
+      routes: state.routes.map((route) => ({
+        ...route,
+        color: state.settings.routeColors[route.type],
+      })),
+    })),
   
   setMapInstance: (map) => set({ mapInstance: map }),
   

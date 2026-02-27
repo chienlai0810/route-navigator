@@ -19,10 +19,6 @@ L.Icon.Default.mergeOptions({
     "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 });
 
-function formatKm2(areaM2: number) {
-  return (areaM2 / 1_000_000).toFixed(2);
-}
-
 function createPostOfficeIcon() {
   // Use CSS variables so this stays theme-consistent
   return L.divIcon({
@@ -64,7 +60,6 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
     setActiveTool,
     updateRoute,
     setMapInstance,
-    resetAllPolygons,
     saveOriginalPolygon,
     editingRouteId,
     editMode,
@@ -91,6 +86,8 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
     () => routes.filter((r) => r.isVisible),
     [routes]
   );
+
+  console.log('Visible routes:', visibleRoutes);
 
   // 1) Initialize the Leaflet map once
   useEffect(() => {
@@ -325,35 +322,6 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
       map.off('pm:remove', onRemove);
     };
   }, [setActiveTool, onPolygonCreated, updateRoute]);
-
-  // 3) Drawing: click to add vertices, dblclick to finish (Legacy - can be removed if using Geoman)
-  // useEffect(() => {
-  //   const map = mapRef.current;
-  //   if (!map) return;
-
-  //   const onClick = (e: L.LeafletMouseEvent) => {
-  //     if (activeTool !== "draw") return;
-  //     addPolygonPoint({ lat: e.latlng.lat, lng: e.latlng.lng });
-  //   };
-
-  //   const onDblClick = (e: L.LeafletMouseEvent) => {
-  //     if (activeTool !== "draw") return;
-  //     // Prevent zoom
-  //     e.originalEvent?.preventDefault?.();
-  //     e.originalEvent?.stopPropagation?.();
-
-  //     // For now: finish drawing mode (saving is handled by the top toolbar)
-  //     setActiveTool("select");
-  //   };
-
-  //   map.on("click", onClick);
-  //   map.on("dblclick", onDblClick);
-
-  //   return () => {
-  //     map.off("click", onClick);
-  //     map.off("dblclick", onDblClick);
-  //   };
-  // }, [activeTool, addPolygonPoint, setActiveTool]);
 
   // 4) Render routes + markers
   useEffect(() => {
@@ -602,27 +570,11 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
     }
   }, [editingRouteId, editMode, updateRoute]);
 
-  const handleResetPolygons = () => {
-    if (window.confirm('Bạn có chắc chắn muốn reset tất cả các polygon về trạng thái ban đầu?')) {
-      // Force re-render by incrementing reset counter
-      setResetCounter(prev => prev + 1);
-      // Reset all polygons in store
-      resetAllPolygons();
-      // Clear all layers and force re-create
-      const routeLayer = routeLayerRef.current;
-      if (routeLayer) {
-        routeLayer.clearLayers();
-      }
-      layerToRouteMap.current.clear();
-      routeToLayerMap.current.clear();
-    }
-  };
-
   const layerOptions = [
     { value: 'roadmap' as const, label: 'Bản đồ', icon: '🗺️' },
-    { value: 'satellite' as const, label: 'Vệ tinh', icon: '🛰️' },
-    { value: 'hybrid' as const, label: 'Hybrid', icon: '🌍' },
-    { value: 'terrain' as const, label: 'Địa hình', icon: '⛰️' },
+    { value: 'hybrid' as const, label: 'Vệ tinh', icon: '🛰️' },
+    // { value: 'hybrid' as const, label: 'Hybrid', icon: '🌍' },
+    // { value: 'terrain' as const, label: 'Địa hình', icon: '⛰️' },
   ];
 
   const currentLayer = layerOptions.find(opt => opt.value === layerType);
@@ -674,31 +626,6 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
           )}
         </div>
       </div>
-      
-      {/* Reset Button */}
-      {/* <button
-        onClick={handleResetPolygons}
-        className="absolute top-4 right-4 z-[1000] bg-background border-2 border-border hover:bg-accent hover:border-primary text-foreground px-4 py-2 rounded-lg shadow-lg transition-all flex items-center gap-2 font-medium"
-        title="Reset tất cả polygon về trạng thái ban đầu"
-      >
-        <svg 
-          xmlns="http://www.w3.org/2000/svg" 
-          width="18" 
-          height="18" 
-          viewBox="0 0 24 24" 
-          fill="none" 
-          stroke="currentColor" 
-          strokeWidth="2" 
-          strokeLinecap="round" 
-          strokeLinejoin="round"
-        >
-          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-          <path d="M21 3v5h-5"/>
-          <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-          <path d="M8 16H3v5"/>
-        </svg>
-        Reset Polygons
-      </button> */}
     </div>
   );
 }
