@@ -27,6 +27,10 @@ interface MapState {
   filterCity: string | null;
   filterDistrict: string | null;
   
+  // Highlighted routes for check point feature
+  highlightedRouteIds: string[];
+  checkPointLocation: { lat: number; lng: number } | null;
+  
   // Settings
   settings: Settings;
   
@@ -60,6 +64,8 @@ interface MapState {
   resetAllPolygons: () => void;
   saveOriginalPolygon: (routeId: string, polygon: Array<{ lat: number; lng: number }>) => void;
   revertPolygon: (routeId: string) => void;
+  setHighlightedRouteIds: (ids: string[]) => void;
+  setCheckPointLocation: (location: { lat: number; lng: number } | null) => void;
 }
 
 
@@ -147,6 +153,10 @@ export const useMapStore = create<MapState>((set, get) => ({
   filterEmployeeId: null,
   filterCity: null,
   filterDistrict: null,
+  
+  // Highlighted routes
+  highlightedRouteIds: [],
+  checkPointLocation: null,
   
   // Settings
   settings: {
@@ -321,4 +331,8 @@ export const useMapStore = create<MapState>((set, get) => ({
       return state;
     });
   },
+  
+  setHighlightedRouteIds: (ids) => set({ highlightedRouteIds: ids }),
+  
+  setCheckPointLocation: (location) => set({ checkPointLocation: location }),
 }));

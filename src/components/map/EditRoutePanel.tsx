@@ -156,6 +156,28 @@ export function EditRoutePanel() {
     }
   };
 
+  // Convert internal polygon format to GeoJSON Polygon format
+  const convertPolygonToRouteArea = (polygon: Array<{ lat: number; lng: number }>) => {
+    // Convert to array of [longitude, latitude] pairs
+    const coordinates = polygon.map(point => [point.lng, point.lat] as [number, number]);
+    
+    // Ensure the polygon is closed (first point equals last point)
+    if (coordinates.length > 0) {
+      const firstPoint = coordinates[0];
+      const lastPoint = coordinates[coordinates.length - 1];
+      
+      // Check if loop is not closed
+      if (firstPoint[0] !== lastPoint[0] || firstPoint[1] !== lastPoint[1]) {
+        coordinates.push([firstPoint[0], firstPoint[1]]);
+      }
+    }
+    
+    return {
+      type: 'Polygon' as const,
+      coordinates: [coordinates] // GeoJSON Polygon requires array of rings
+    };
+  };
+
   const handleSave = async (values: FormValues) => {
     if (!route) return;
 
@@ -176,10 +198,7 @@ export function EditRoutePanel() {
       type: apiType,
       productType: productTypeString,
       staffMain: values.employeeName.trim(),
-      area: {
-        type: 'Polygon',
-        coordinates: currentRoute.polygon,
-      },
+      area: convertPolygonToRouteArea(currentRoute.polygon),
     };
 
     try {

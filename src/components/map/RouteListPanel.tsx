@@ -21,6 +21,7 @@ import { useState } from 'react';
 import { Search, Filter } from 'lucide-react';
 import { DeleteRouteModal } from '../routes';
 import { routeTypeLabels, routeTypeColors } from '@/constants';
+import { CheckPointInput } from './CheckPointInput';
 
 export function RouteListPanel() {
   const {
@@ -33,6 +34,7 @@ export function RouteListPanel() {
     filterRouteType,
     setFilterPostOfficeId,
     setFilterRouteType,
+    highlightedRouteIds,
   } = useMapStore();
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -48,6 +50,8 @@ export function RouteListPanel() {
 
   return (
     <div className="w-80 bg-card border-r border-border flex flex-col h-full">
+      {/* Check Point Input */}
+          <CheckPointInput />
       {/* Header */}
       <div className="p-4 border-b border-border">
         <div className="flex items-center justify-between mb-4">
@@ -111,6 +115,7 @@ export function RouteListPanel() {
       <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1">
         {filteredRoutes.map((route) => {
           const isSelected = selectedRouteId === route.id;
+          const isHighlighted = highlightedRouteIds.includes(route.id);
 
           return (
             <div
@@ -118,6 +123,7 @@ export function RouteListPanel() {
               onClick={() => setSelectedRoute(isSelected ? null : route.id, !isSelected)}
               className={cn(
                 'p-3 rounded-lg cursor-pointer transition-all duration-200 border',
+                isHighlighted && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
                 isSelected
                   ? 'bg-primary/5 border-primary/30'
                   : 'bg-background border-transparent hover:bg-accent'

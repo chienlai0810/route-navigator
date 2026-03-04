@@ -56,7 +56,13 @@ export default function MapPage() {
           return Math.abs((area * R * R) / 2);
         };
 
-        const area = computeArea(apiRoute.area.coordinates);
+        // Convert GeoJSON points to polygon coordinates
+        const polygon = apiRoute.area.points.map(point => ({
+          lat: point.y,
+          lng: point.x
+        }));
+
+        const area = computeArea(polygon);
 
         // Parse productType from string format "HH;TH" to array
         const productTypeArray: ('HH' | 'KH' | 'TH')[] = apiRoute.productType 
@@ -74,7 +80,7 @@ export default function MapPage() {
           postOfficeId: apiRoute.postOfficeId || (postOffices && postOffices[0]?.id) || '',
           assignedEmployeeName: apiRoute.staffMain,
           assignedEmployeeId: undefined,
-          polygon: apiRoute.area.coordinates,
+          polygon,
           area,
           isVisible: true,
           createdAt: new Date(apiRoute.createdAt),

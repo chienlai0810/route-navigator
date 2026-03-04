@@ -111,6 +111,28 @@ export function NewRouteDrawer({
     return Math.abs((area * R * R) / 2);
   };
 
+  // Convert internal polygon format to GeoJSON Polygon format
+  const convertPolygonToRouteArea = (polygon: Array<{ lat: number; lng: number }>) => {
+    // Convert to array of [longitude, latitude] pairs
+    const coordinates = polygon.map(point => [point.lng, point.lat] as [number, number]);
+    
+    // Ensure the polygon is closed (first point equals last point)
+    if (coordinates.length > 0) {
+      const firstPoint = coordinates[0];
+      const lastPoint = coordinates[coordinates.length - 1];
+      
+      // Check if loop is not closed
+      if (firstPoint[0] !== lastPoint[0] || firstPoint[1] !== lastPoint[1]) {
+        coordinates.push([firstPoint[0], firstPoint[1]]);
+      }
+    }
+    
+    return {
+      type: 'Polygon' as const,
+      coordinates: [coordinates] // GeoJSON Polygon requires array of rings
+    };
+  };
+
   const handleSave = async (values: FormValues) => {
     if (!pendingPolygon) return;
 
@@ -131,10 +153,7 @@ export function NewRouteDrawer({
       type: apiType,
       productType: productTypeString,
       staffMain: values.employeeName.trim(),
-      area: {
-        type: 'Polygon',
-        coordinates: pendingPolygon,
-      },
+      area: convertPolygonToRouteArea(pendingPolygon),
     };
 
     try {
@@ -145,6 +164,12 @@ export function NewRouteDrawer({
       const productTypeArray: ('HH' | 'KH' | 'TH')[] = apiResponse.productType 
         ? apiResponse.productType.split(';').filter(Boolean) as ('HH' | 'KH' | 'TH')[]
         : [];
+
+      // Convert API polygon format back to internal format
+      const polygonFromApi = apiResponse.area.points.map(point => ({
+        lat: point.y,
+        lng: point.x
+      }));
 
       // Add route to local store with API response data
       const newRoute: Route = {
@@ -157,7 +182,7 @@ export function NewRouteDrawer({
         postOfficeId,
         assignedEmployeeId: `emp-${Date.now()}`,
         assignedEmployeeName: apiResponse.staffMain,
-        polygon: apiResponse.area.coordinates,
+        polygon: polygonFromApi,
         area,
         isVisible: true,
         createdAt: apiResponse.createdAt ? new Date(apiResponse.createdAt) : new Date(),

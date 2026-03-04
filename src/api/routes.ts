@@ -9,9 +9,29 @@ export interface RouteCoordinate {
   lng: number;
 }
 
+export interface GeoJsonPoint {
+  x: number; // longitude
+  y: number; // latitude
+  type: "Point";
+  coordinates: [number, number]; // [longitude, latitude]
+}
+
+export interface RouteAreaLineString {
+  type: "LineString";
+  coordinates: GeoJsonPoint[];
+}
+
+// GeoJSON Polygon format for API requests (create/update)
+export interface RouteAreaPayload {
+  type: 'Polygon';
+  coordinates: [number, number][][]; // Array of rings, each ring is array of [lng, lat]
+}
+
+// API Response format (includes additional fields)
 export interface RouteArea {
   type: 'Polygon';
-  coordinates: RouteCoordinate[];
+  points: GeoJsonPoint[];
+  coordinates: RouteAreaLineString[];
 }
 
 export interface RouteResponse {
@@ -36,7 +56,7 @@ export interface CreateRoutePayload {
   type: RouteType;
   productType: string; // Format: "HH;TH" or single value "HH"
   staffMain: string;
-  area: RouteArea;
+  area: RouteAreaPayload;
 }
 
 export interface UpdateRoutePayload {
@@ -45,7 +65,29 @@ export interface UpdateRoutePayload {
   type?: RouteType;
   productType?: string; // Format: "HH;TH" or single value "HH"
   staffMain?: string;
-  area?: RouteArea;
+  area?: RouteAreaPayload;
+}
+
+// Check Point in Polygon Types
+export interface CheckPointPayload {
+  latitude: number;
+  longitude: number;
+}
+
+export interface MatchingRoute {
+  id: string;
+  code: string;
+  name: string;
+  type: RouteType;
+  color: string | null;
+}
+
+export interface CheckPointResponse {
+  found: boolean;
+  latitude: number;
+  longitude: number;
+  matchingRoutes: MatchingRoute[];
+  postOffice: any | null; // Can be typed more specifically if needed
 }
 
 // API service cho Routes
@@ -78,5 +120,11 @@ export const routesApi = {
   delete: async (id: string) => {
     const response = await axiosInstance.delete<ApiResponse<void>>(`/routes/${id}`);
     return response.data;
+  },
+
+  // Kiểm tra điểm có nằm trong tuyến đường nào không
+  checkPointInPolygon: async (data: CheckPointPayload): Promise<CheckPointResponse> => {
+    const response = await axiosInstance.post<ApiResponse<CheckPointResponse>>('/gis/check-point', data);
+    return response.data.data;
   },
 };

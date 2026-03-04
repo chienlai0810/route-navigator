@@ -5,8 +5,10 @@ import "leaflet.gridlayer.googlemutant";
 import "@geoman-io/leaflet-geoman-free";
 import "@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css";
 import { useMapStore } from "@/hooks/useMapStore";
+import { useCheckPoint } from "@/hooks/useCheckPoint";
 import { PostOffice } from "@/types";
 import { routeTypeLabels } from "@/constants";
+import { CheckPointButton, CheckPointResult } from "./CheckPointButton";
 
 // Fix for default marker icons (Leaflet expects image assets)
 delete (L.Icon.Default.prototype as any)._getIconUrl;
@@ -63,7 +65,17 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
     saveOriginalPolygon,
     editingRouteId,
     editMode,
+    highlightedRouteIds,
+    checkPointLocation,
   } = useMapStore();
+
+  const {
+    isCheckingMode,
+    toggleCheckingMode,
+    checkPoint,
+    lastCheckedPoint,
+    isLoading: isCheckingPoint,
+  } = useCheckPoint();
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -71,6 +83,8 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
   const postOfficeLayerRef = useRef<L.LayerGroup | null>(null);
   const drawingLayerRef = useRef<L.LayerGroup | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const checkPointMarkerRef = useRef<L.Marker | null>(null);
+  const checkPointInputMarkerRef = useRef<L.Marker | null>(null);
   // Track layer-to-route mapping
   const layerToRouteMap = useRef<Map<number, string>>(new Map());
   const routeToLayerMap = useRef<Map<string, L.Polygon>>(new Map());
@@ -237,6 +251,63 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
     }
   }, [activeTool]);
 
+  // Handle map click for check point mode
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const handleMapClick = (e: L.LeafletMouseEvent) => {
+      if (!isCheckingMode) return;
+      
+      const { lat, lng } = e.latlng;
+      checkPoint(lat, lng);
+
+      // Remove previous marker if exists
+      if (checkPointMarkerRef.current) {
+        checkPointMarkerRef.current.remove();
+      }
+
+      // Add marker at clicked point
+      const marker = L.marker([lat, lng], {
+        icon: L.divIcon({
+          className: '',
+          html: `
+            <div style="
+              width: 24px;
+              height: 24px;
+              border-radius: 50%;
+              background: hsl(var(--primary));
+              border: 3px solid white;
+              box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            "></div>
+          `,
+          iconSize: [24, 24],
+          iconAnchor: [12, 12],
+        }),
+      }).addTo(map);
+
+      checkPointMarkerRef.current = marker;
+    };
+
+    if (isCheckingMode) {
+      map.on('click', handleMapClick);
+      map.getContainer().style.cursor = 'crosshair';
+    } else {
+      map.off('click', handleMapClick);
+      map.getContainer().style.cursor = '';
+      
+      // Remove marker when exiting check mode
+      if (checkPointMarkerRef.current) {
+        checkPointMarkerRef.current.remove();
+        checkPointMarkerRef.current = null;
+      }
+    }
+
+    return () => {
+      map.off('click', handleMapClick);
+    };
+  }, [isCheckingMode, checkPoint]);
+
   // 3) Geoman event listeners
   useEffect(() => {
     const map = mapRef.current;
@@ -336,6 +407,7 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
     visibleRoutes.forEach((route) => {
       processedRouteIds.add(route.id);
       const isSelected = selectedRouteId === route.id;
+      const isHighlighted = highlightedRouteIds.includes(route.id);
       
       // Save original polygon if not already saved
       saveOriginalPolygon(route.id, route.polygon);
@@ -348,12 +420,13 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
         const newLatLngs = route.polygon.map((p) => [p.lat, p.lng] as [number, number]);
         polygon.setLatLngs(newLatLngs);
         
-        // Update style
+        // Update style - highlighted routes get special styling
         polygon.setStyle({
-          color: route.color,
-          fillColor: route.color,
-          fillOpacity: isSelected ? 0.4 : 0.25,
-          weight: isSelected ? 3 : 2,
+          color: isHighlighted ? '#ff0000' : route.color,
+          fillColor: isHighlighted ? '#ff0000' : route.color,
+          fillOpacity: isHighlighted ? 0.5 : (isSelected ? 0.4 : 0.25),
+          weight: isHighlighted ? 4 : (isSelected ? 3 : 2),
+          dashArray: isHighlighted ? '10, 5' : undefined,
         });
         
         // Update tooltip
@@ -369,13 +442,16 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
         );
       } else {
         // Create new polygon
+        const isHighlighted = highlightedRouteIds.includes(route.id);
+        
         polygon = L.polygon(
           route.polygon.map((p) => [p.lat, p.lng] as [number, number]),
           {
-            color: route.color,
-            fillColor: route.color,
-            fillOpacity: isSelected ? 0.4 : 0.25,
-            weight: isSelected ? 3 : 2,
+            color: isHighlighted ? '#ff0000' : route.color,
+            fillColor: isHighlighted ? '#ff0000' : route.color,
+            fillOpacity: isHighlighted ? 0.5 : (isSelected ? 0.4 : 0.25),
+            weight: isHighlighted ? 4 : (isSelected ? 3 : 2),
+            dashArray: isHighlighted ? '10, 5' : undefined,
             pmIgnore: false,
           }
         );
@@ -394,13 +470,18 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
           setSelectedRoute(route.id, true);
         });
       polygon.on("mouseover", () => {
-        polygon.setStyle({ weight: 3, fillOpacity: 0.35 });
+        const stillHighlighted = highlightedRouteIds.includes(route.id);
+        polygon.setStyle({ 
+          weight: stillHighlighted ? 5 : 3, 
+          fillOpacity: stillHighlighted ? 0.6 : 0.35 
+        });
       });
       polygon.on("mouseout", () => {
         const stillSelected = selectedRouteId === route.id;
+        const stillHighlighted = highlightedRouteIds.includes(route.id);
         polygon.setStyle({
-          weight: stillSelected ? 3 : 2,
-          fillOpacity: stillSelected ? 0.4 : 0.25,
+          weight: stillHighlighted ? 4 : (stillSelected ? 3 : 2),
+          fillOpacity: stillHighlighted ? 0.5 : (stillSelected ? 0.4 : 0.25),
         });
       });
 
@@ -449,7 +530,7 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
 
       marker.addTo(postOfficeLayer);
     });
-  }, [postOffices, visibleRoutes, selectedRouteId, setSelectedRoute]);
+  }, [postOffices, visibleRoutes, selectedRouteId, setSelectedRoute, highlightedRouteIds, saveOriginalPolygon]);
 
   // 5) Render current drawing polygon (legacy click-based drawing only)
   // Note: This effect is for the legacy drawing system. Geoman shapes are managed separately.
@@ -491,6 +572,64 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
       dashArray: "5, 5",
     }).addTo(drawingLayer);
   }, [activeTool, currentPolygon]);
+
+  // Render marker for check point location from input
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Remove previous marker if exists
+    if (checkPointInputMarkerRef.current) {
+      checkPointInputMarkerRef.current.remove();
+      checkPointInputMarkerRef.current = null;
+    }
+
+    if (!checkPointLocation) return;
+
+    // Add marker at check point location
+    const marker = L.marker([checkPointLocation.lat, checkPointLocation.lng], {
+      icon: L.divIcon({
+        className: '',
+        html: `
+          <div style="
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #ff0000;
+            border: 4px solid white;
+            box-shadow: 0 2px 12px rgba(255,0,0,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          ">
+            <svg style="width: 16px; height: 16px; color: white;" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clip-rule="evenodd"/>
+            </svg>
+          </div>
+        `,
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+      }),
+    }).addTo(map);
+
+    marker.bindTooltip(
+      `<div style="font-size: 12px; line-height: 1.35;">
+        <div style="font-weight: 600; margin-bottom: 2px;">Điểm kiểm tra</div>
+        <div style="opacity: 0.8;">Lat: ${checkPointLocation.lat.toFixed(4)}</div>
+        <div style="opacity: 0.8;">Lng: ${checkPointLocation.lng.toFixed(4)}</div>
+      </div>`,
+      { direction: "top" }
+    );
+
+    checkPointInputMarkerRef.current = marker;
+
+    return () => {
+      if (checkPointInputMarkerRef.current) {
+        checkPointInputMarkerRef.current.remove();
+        checkPointInputMarkerRef.current = null;
+      }
+    };
+  }, [checkPointLocation]);
 
   // Enable/disable polygon editing when editingRouteId or editMode changes
   useEffect(() => {
@@ -580,6 +719,28 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
   return (
     <div className="relative w-full h-full">
       <div ref={containerRef} className="w-full h-full" />
+      
+      {/* Check Point Button */}
+      {/* <div className="absolute top-4 left-20 z-[1000]">
+        <CheckPointButton
+          isActive={isCheckingMode}
+          onToggle={toggleCheckingMode}
+          isLoading={isCheckingPoint}
+        />
+      </div> */}
+
+      {/* Check Point Result */}
+      {lastCheckedPoint && (
+        <CheckPointResult
+          result={lastCheckedPoint}
+          onClose={() => {
+            if (checkPointMarkerRef.current) {
+              checkPointMarkerRef.current.remove();
+              checkPointMarkerRef.current = null;
+            }
+          }}
+        />
+      )}
       
       {/* Layer Switcher */}
       <div className="absolute top-4 right-4 z-[1000]">
