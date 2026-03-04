@@ -3,16 +3,26 @@ import { useMutation } from '@tanstack/react-query';
 import { MapPin, Search, X, MapPinned, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { routesApi } from '@/api/routes';
 import { goongApi, GoongPrediction } from '@/api/goong';
 import { useMapStore } from '@/hooks/useMapStore';
 import { useDebounce } from '@/hooks/useDebounce';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { productTypeOptions } from '@/constants';
+import { ProductType } from '@/types';
 
 export function CheckPointInput() {
   const [latitude, setLatitude] = useState('');
   const [longitude, setLongitude] = useState('');
+  const [productType, setProductType] = useState<ProductType | 'ALL'>('ALL');
   const [addressInput, setAddressInput] = useState('');
   const [suggestions, setSuggestions] = useState<GoongPrediction[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -61,8 +71,8 @@ export function CheckPointInput() {
   }, []);
 
   const checkPointMutation = useMutation({
-    mutationFn: ({ latitude, longitude }: { latitude: number; longitude: number }) =>
-      routesApi.checkPointInPolygon({ latitude, longitude }),
+    mutationFn: ({ latitude, longitude, productType }: { latitude: number; longitude: number; productType?: string }) =>
+      routesApi.checkPointInPolygon({ latitude, longitude, productType }),
     onSuccess: (data) => {
       const routeIds = data.matchingRoutes.map(r => r.id);
       setHighlightedRouteIds(routeIds);
@@ -107,12 +117,17 @@ export function CheckPointInput() {
       return;
     }
 
-    checkPointMutation.mutate({ latitude: lat, longitude: lng });
+    checkPointMutation.mutate({ 
+      latitude: lat, 
+      longitude: lng,
+      productType: productType !== 'ALL' ? productType : undefined
+    });
   };
 
   const handleClear = () => {
     setLatitude('');
     setLongitude('');
+    setProductType('ALL');
     setAddressInput('');
     setSuggestions([]);
     setHighlightedRouteIds([]);
@@ -135,7 +150,8 @@ export function CheckPointInput() {
         // Auto check the point
         checkPointMutation.mutate({ 
           latitude: location.lat, 
-          longitude: location.lng 
+          longitude: location.lng,
+          productType: productType !== 'ALL' ? productType : undefined
         });
       } else {
         toast.error('Không thể lấy tọa độ từ địa chỉ này');
@@ -210,7 +226,6 @@ export function CheckPointInput() {
             </div>
           )}
         </div>
-
         {/* Lat/Long Inputs */}
         <div className="flex gap-2">
           <Input
@@ -231,6 +246,23 @@ export function CheckPointInput() {
             className="h-8 text-xs"
             onKeyPress={(e) => e.key === 'Enter' && handleCheck()}
           />
+        </div>
+
+        {/* Product Type Select */}
+        <div>
+          <Select value={productType} onValueChange={(value) => setProductType(value as ProductType | 'ALL')}>
+            <SelectTrigger className="h-8 text-sm">
+              <SelectValue placeholder="Loại hàng hóa" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Tất cả loại hàng</SelectItem>
+              {productTypeOptions.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         
         <Button

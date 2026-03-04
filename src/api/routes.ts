@@ -72,6 +72,7 @@ export interface UpdateRoutePayload {
 export interface CheckPointPayload {
   latitude: number;
   longitude: number;
+  productType?: string; // Optional: 'HH', 'KH', 'TH'
 }
 
 export interface MatchingRoute {
