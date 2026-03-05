@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { MapView } from '@/components/map/MapView';
 import { RouteListPanel } from '@/components/map/RouteListPanel';
 import { NewRouteDrawer } from '@/components/map/NewRouteDrawer';
@@ -11,7 +11,15 @@ import { useQuery } from '@tanstack/react-query';
 import { Route, RouteType } from '@/types';
 
 export default function MapPage() {
-  const { selectedRouteId, showRoutePanel, setSelectedRoute, addRoute, routes, settings } = useMapStore();
+  const { 
+    selectedRouteId, 
+    showRoutePanel, 
+    setSelectedRoute, 
+    setRoutes,
+    settings,
+    filterPostOfficeId,
+    filterRouteType,
+  } = useMapStore();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [pendingPolygon, setPendingPolygon] = useState<Array<{ lat: number; lng: number }> | null>(null);
@@ -22,76 +30,91 @@ export default function MapPage() {
     queryFn: () => postOfficesApi.getAll(),
   });
 
-  // Fetch routes từ API
+  // Fetch routes từ API với filter params
   const { data: apiRoutes = [] } = useQuery({
-    queryKey: ['routes'],
-    queryFn: () => routesApi.getAll(),
+    queryKey: ['routes', filterPostOfficeId, filterRouteType],
+    queryFn: () => {
+      // Convert local RouteType to API RouteType (uppercase)
+      const apiRouteType = filterRouteType 
+        ? (filterRouteType.toUpperCase() as 'DELIVERY' | 'PICKUP' | 'ALL')
+        : null;
+      
+      return routesApi.getAll({
+        postOfficeId: filterPostOfficeId,
+        type: apiRouteType,
+      });
+    },
   });
 
-  // Sync routes từ API vào zustand store
-  useEffect(() => {
-    if (apiRoutes.length > 0) {
-      // Map API response to local Route format
-      apiRoutes.forEach((apiRoute: RouteResponse) => {
-        // Check if route already exists in store
-        const existingRoute = routes.find(r => r.id === apiRoute.id);
-        if (existingRoute) return; // Skip if already exists
+  // Transform API routes to local Route format (memoized)
+  const localRoutes = useMemo(() => {
+    if (apiRoutes.length === 0) return [];
+    
+    return apiRoutes.map((apiRoute: RouteResponse) => {
+      // Map type from uppercase to lowercase
+      const localType = apiRoute.type.toLowerCase() as RouteType;
+      
+      // Compute area
+      const computeArea = (polygon: Array<{ lat: number; lng: number }>) => {
+        if (polygon.length < 3) return 0;
+        const R = 6371000;
+        let area = 0;
+        for (let i = 0; i < polygon.length; i++) {
+          const j = (i + 1) % polygon.length;
+          const lat1 = (polygon[i].lat * Math.PI) / 180;
+          const lat2 = (polygon[j].lat * Math.PI) / 180;
+          const lng1 = (polygon[i].lng * Math.PI) / 180;
+          const lng2 = (polygon[j].lng * Math.PI) / 180;
+          area += (lng2 - lng1) * (2 + Math.sin(lat1) + Math.sin(lat2));
+        }
+        return Math.abs((area * R * R) / 2);
+      };
 
-        // Map type from uppercase to lowercase
-        const localType = apiRoute.type.toLowerCase() as RouteType;
-        
-        // Compute area
-        const computeArea = (polygon: Array<{ lat: number; lng: number }>) => {
-          if (polygon.length < 3) return 0;
-          const R = 6371000;
-          let area = 0;
-          for (let i = 0; i < polygon.length; i++) {
-            const j = (i + 1) % polygon.length;
-            const lat1 = (polygon[i].lat * Math.PI) / 180;
-            const lat2 = (polygon[j].lat * Math.PI) / 180;
-            const lng1 = (polygon[i].lng * Math.PI) / 180;
-            const lng2 = (polygon[j].lng * Math.PI) / 180;
-            area += (lng2 - lng1) * (2 + Math.sin(lat1) + Math.sin(lat2));
-          }
-          return Math.abs((area * R * R) / 2);
-        };
+      // Convert GeoJSON points to polygon coordinates
+      const polygon = apiRoute.area.points.map(point => ({
+        lat: point.y,
+        lng: point.x
+      }));
 
-        // Convert GeoJSON points to polygon coordinates
-        const polygon = apiRoute.area.points.map(point => ({
-          lat: point.y,
-          lng: point.x
-        }));
+      const area = computeArea(polygon);
 
-        const area = computeArea(polygon);
+      // Parse productType from string format "HH;TH" to array
+      const productTypeArray: ('HH' | 'KH' | 'TH')[] = apiRoute.productType 
+        ? apiRoute.productType.split(';').filter(Boolean) as ('HH' | 'KH' | 'TH')[]
+        : [];
 
-        // Parse productType from string format "HH;TH" to array
-        const productTypeArray: ('HH' | 'KH' | 'TH')[] = apiRoute.productType 
-          ? apiRoute.productType.split(';').filter(Boolean) as ('HH' | 'KH' | 'TH')[]
-          : [];
-
-        // Create local route from API data
-        const localRoute: Route = {
-          id: apiRoute.id,
-          name: apiRoute.name,
-          code: apiRoute.code,
-          type: localType,
-          productType: productTypeArray,
-          color: apiRoute.color || settings.routeColors[localType],
-          postOfficeId: apiRoute.postOfficeId || (postOffices && postOffices[0]?.id) || '',
-          assignedEmployeeName: apiRoute.staffMain,
-          assignedEmployeeId: undefined,
-          polygon,
-          area,
-          isVisible: true,
-          createdAt: new Date(apiRoute.createdAt),
-          updatedAt: new Date(apiRoute.updatedAt),
-        };
-
-        addRoute(localRoute);
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      // Create local route from API data
+      return {
+        id: apiRoute.id,
+        name: apiRoute.name,
+        code: apiRoute.code,
+        type: localType,
+        productType: productTypeArray,
+        color: apiRoute.color || settings.routeColors[localType],
+        postOfficeId: apiRoute.postOfficeId || (postOffices && postOffices[0]?.id) || '',
+        assignedEmployeeName: apiRoute.staffMain,
+        assignedEmployeeId: undefined,
+        polygon,
+        area,
+        isVisible: true,
+        createdAt: new Date(apiRoute.createdAt),
+        updatedAt: new Date(apiRoute.updatedAt),
+      };
+    });
   }, [apiRoutes, settings, postOffices]);
+
+  // Sync routes to zustand store (only when localRoutes change)
+  const prevRoutesRef = useRef<string>('');
+  useEffect(() => {
+    // Create a stable comparison key based on route IDs
+    const routesKey = localRoutes.map(r => r.id).sort().join(',');
+    
+    // Only update if routes actually changed
+    if (prevRoutesRef.current !== routesKey) {
+      prevRoutesRef.current = routesKey;
+      setRoutes(localRoutes);
+    }
+  }, [localRoutes, setRoutes]);
 
   // Đóng NewRouteDrawer khi EditRoutePanel mở
   useEffect(() => {
@@ -135,7 +158,7 @@ export default function MapPage() {
 
   return (
     <div className="h-full flex">
-      {showRoutePanel && <RouteListPanel />}
+      {showRoutePanel && <RouteListPanel postOffices={postOffices} />}
 
       <div className="flex-1 relative">
         <MapView onPolygonCreated={handlePolygonCreated} postOffices={postOffices} />
@@ -169,7 +192,7 @@ export default function MapPage() {
         </div>
       </div>
 
-      {selectedRouteId && <EditRoutePanel />}
+      {selectedRouteId && <EditRoutePanel postOffices={postOffices} />}
 
       <NewRouteDrawer
         open={drawerOpen}
@@ -178,6 +201,7 @@ export default function MapPage() {
         pendingLayer={pendingLayer}
         onSaved={handleSaved}
         onCancelled={handleCancelled}
+        postOffices={postOffices}
       />
     </div>
   );

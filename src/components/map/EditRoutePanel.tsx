@@ -4,7 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { X, User, MapPin, Calendar, Edit2, Trash2, Save, Palette, Loader2 } from 'lucide-react';
+import { X, User, MapPin, Calendar, Edit2, Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -24,27 +24,31 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { useMapStore } from '@/hooks/useMapStore';
-import { RouteType } from '@/types';
+import { PostOffice } from '@/types';
 import { routesApi, UpdateRoutePayload } from '@/api/routes';
 import { cn } from '@/lib/utils';
 import { routeTypeLabels, routeTypeColors, routeTypeOptions, productTypeOptions } from '@/constants';
+
+interface IProps {
+  postOffices?: PostOffice[];
+}
 
 const formSchema = z.object({
   name: z.string().min(1, 'Tên tuyến là bắt buộc'),
   code: z.string().min(1, 'Mã tuyến là bắt buộc'),
   type: z.enum(['delivery', 'pickup', 'all'] as const),
   productType: z.array(z.enum(['HH', 'KH', 'TH'] as const)).min(1, 'Chọn ít nhất một loại hàng hóa'),
+  postOfficeId: z.string().min(1, 'Bưu cục là bắt buộc'),
   employeeName: z.string().min(1, 'Nhân viên phụ trách là bắt buộc'),
 });
 
 type FormValues = z.infer<typeof formSchema>;
 
-export function EditRoutePanel() {
+export function EditRoutePanel({ postOffices }: IProps) {
   const { 
     routes, 
     selectedRouteId, 
     setSelectedRoute, 
-    postOffices, 
     updateRoute,
     setEditingRouteId,
     revertPolygon,
@@ -80,6 +84,7 @@ export function EditRoutePanel() {
       code: '',
       type: 'delivery',
       productType: [],
+      postOfficeId: '',
       employeeName: '',
     },
   });
@@ -92,6 +97,7 @@ export function EditRoutePanel() {
         code: route.code || '',
         type: route.type,
         productType: route.productType || [],
+        postOfficeId: route.postOfficeId || '',
         employeeName: route.assignedEmployeeName || '',
       });
     }
@@ -197,6 +203,7 @@ export function EditRoutePanel() {
       name: values.name.trim(),
       type: apiType,
       productType: productTypeString,
+      postOfficeId: values.postOfficeId,
       staffMain: values.employeeName.trim(),
       area: convertPolygonToRouteArea(currentRoute.polygon),
     };
@@ -211,6 +218,7 @@ export function EditRoutePanel() {
         code: values.code.trim(),
         type: values.type,
         productType: values.productType,
+        postOfficeId: values.postOfficeId,
         assignedEmployeeName: values.employeeName.trim(),
         assignedEmployeeId: currentRoute.assignedEmployeeId || `emp-${Date.now()}`,
       });
@@ -387,6 +395,32 @@ export function EditRoutePanel() {
                   </FormItem>
                 )}
               />
+
+               {/* Post Office */}
+              <FormField
+                control={form.control}
+                name="postOfficeId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Bưu cục *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Chọn bưu cục" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {postOffices.map((po) => (
+                          <SelectItem key={po.id} value={po.id}>
+                            {po.name} ({po.code})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </form>
           </Form>
         ) : (
@@ -424,6 +458,21 @@ export function EditRoutePanel() {
 
             {/* Info Cards */}
             <div className="space-y-3">
+              {/* Post Office */}
+              {route.postOfficeId && (() => {
+                const postOffice = postOffices.find(po => po.id === route.postOfficeId);
+                return postOffice ? (
+                  <div className="p-3 bg-muted/50 rounded-lg">
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                      <MapPin className="w-4 h-4" />
+                      <span>Bưu cục</span>
+                    </div>
+                    <p className="font-medium">{postOffice.name}</p>
+                    <p className="text-xs text-muted-foreground">{postOffice.code}</p>
+                  </div>
+                ) : null;
+              })()}
+
               {/* Assigned Employee */}
               {route.assignedEmployeeName && (
                 <div className="p-3 bg-muted/50 rounded-lg">

@@ -57,6 +57,7 @@ export interface CreateRoutePayload {
   productType: string; // Format: "HH;TH" or single value "HH"
   staffMain: string;
   area: RouteAreaPayload;
+  postOfficeId: string;
 }
 
 export interface UpdateRoutePayload {
@@ -64,6 +65,7 @@ export interface UpdateRoutePayload {
   name?: string;
   type?: RouteType;
   productType?: string; // Format: "HH;TH" or single value "HH"
+  postOfficeId?: string;
   staffMain?: string;
   area?: RouteAreaPayload;
 }
@@ -91,11 +93,30 @@ export interface CheckPointResponse {
   postOffice: any | null; // Can be typed more specifically if needed
 }
 
+// Query params for filtering routes
+export interface RouteQueryParams {
+  postOfficeId?: string | null;
+  type?: RouteType | null;
+}
+
 // API service cho Routes
 export const routesApi = {
   // Lấy danh sách tuyến đường
-  getAll: async (): Promise<RouteResponse[]> => {
-    const response = await axiosInstance.get<ApiResponse<RouteResponse[]>>('/routes');
+  getAll: async (params?: RouteQueryParams): Promise<RouteResponse[]> => {
+    const queryParams = new URLSearchParams();
+    
+    if (params?.postOfficeId) {
+      queryParams.append('postOfficeId', params.postOfficeId);
+    }
+    
+    if (params?.type) {
+      queryParams.append('type', params.type);
+    }
+    
+    const queryString = queryParams.toString();
+    const url = queryString ? `/routes?${queryString}` : '/routes';
+    
+    const response = await axiosInstance.get<ApiResponse<RouteResponse[]>>(url);
     return response.data.data;
   },
 

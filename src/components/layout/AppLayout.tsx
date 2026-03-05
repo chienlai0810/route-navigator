@@ -13,7 +13,7 @@ export function AppLayout() {
       <AppSidebar />
       <div className="flex-1 flex flex-col">
         <AppHeader />
-        <main className="flex-1 overflow-hidden">
+        <main className="h-[calc(100vh-64px)] overflow-hidden">
           <Outlet />
         </main>
       </div>

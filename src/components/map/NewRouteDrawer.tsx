@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,8 +23,9 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { useMapStore } from '@/hooks/useMapStore';
-import { RouteType, Route } from '@/types';
+import { RouteType, Route, PostOffice } from '@/types';
 import { routesApi, CreateRoutePayload } from '@/api/routes';
+import { postOfficesApi } from '@/api/postOffices';
 import { X, Loader2 } from 'lucide-react';
 import { routeTypeOptions, productTypeOptions } from '@/constants';
 
@@ -35,6 +36,7 @@ interface NewRouteDrawerProps {
   pendingLayer: L.Layer | null;
   onSaved: () => void;
   onCancelled: () => void;
+  postOffices?: PostOffice[];
 }
 
 const formSchema = z.object({
@@ -42,6 +44,7 @@ const formSchema = z.object({
   code: z.string().min(1, 'Mã tuyến là bắt buộc'),
   type: z.enum(['delivery', 'pickup', 'all'] as const),
   productType: z.array(z.enum(['HH', 'KH', 'TH'] as const)).min(1, 'Chọn ít nhất một loại hàng hóa'),
+  postOfficeId: z.string().min(1, 'Bưu cục là bắt buộc'),
   employeeName: z.string().min(1, 'Nhân viên phụ trách là bắt buộc'),
 });
 
@@ -52,8 +55,9 @@ export function NewRouteDrawer({
   pendingPolygon,
   onSaved,
   onCancelled,
+  postOffices,
 }: NewRouteDrawerProps) {
-  const { postOffices, addRoute, settings } = useMapStore();
+  const { addRoute, settings } = useMapStore();
   const queryClient = useQueryClient();
 
   // Mutation for creating route
@@ -76,6 +80,7 @@ export function NewRouteDrawer({
       code: '',
       type: 'delivery',
       productType: [],
+      postOfficeId: '',
       employeeName: '',
     },
   });
@@ -90,6 +95,7 @@ export function NewRouteDrawer({
         code: '',
         type: 'delivery',
         productType: [],
+        postOfficeId: '',
         employeeName: '',
       });
     }
@@ -137,7 +143,6 @@ export function NewRouteDrawer({
     if (!pendingPolygon) return;
 
     const area = computeArea(pendingPolygon);
-    const postOfficeId = postOffices[0]?.id ?? '';
     const color = settings.routeColors[values.type];
 
     // Map type to uppercase for API
@@ -152,6 +157,7 @@ export function NewRouteDrawer({
       name: values.name.trim(),
       type: apiType,
       productType: productTypeString,
+      postOfficeId: values.postOfficeId,
       staffMain: values.employeeName.trim(),
       area: convertPolygonToRouteArea(pendingPolygon),
     };
@@ -179,7 +185,7 @@ export function NewRouteDrawer({
         type: values.type,
         productType: productTypeArray,
         color,
-        postOfficeId,
+        postOfficeId: apiResponse.postOfficeId || values.postOfficeId,
         assignedEmployeeId: `emp-${Date.now()}`,
         assignedEmployeeName: apiResponse.staffMain,
         polygon: polygonFromApi,
@@ -324,6 +330,32 @@ export function NewRouteDrawer({
                     {...field}
                   />
                 </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* Post Office */}
+          <FormField
+            control={form.control}
+            name="postOfficeId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Bưu cục *</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Chọn bưu cục" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {postOffices?.map((po) => (
+                      <SelectItem key={po.id} value={po.id}>
+                        {po.name} ({po.code})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <FormMessage />
               </FormItem>
             )}

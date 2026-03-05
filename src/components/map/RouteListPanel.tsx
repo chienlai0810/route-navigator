@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useMapStore } from '@/hooks/useMapStore';
-import { RouteType, Route } from '@/types';
+import { RouteType, Route, PostOffice } from '@/types';
 import {
   Select,
   SelectContent,
@@ -17,16 +17,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, Filter } from 'lucide-react';
 import { DeleteRouteModal } from '../routes';
 import { routeTypeLabels, routeTypeColors } from '@/constants';
 import { CheckPointInput } from './CheckPointInput';
 
-export function RouteListPanel() {
+interface IProps {
+  postOffices?: PostOffice[];
+}
+
+export function RouteListPanel({ postOffices }: IProps) {
   const {
     routes,
-    postOffices,
     selectedRouteId,
     setSelectedRoute,
     toggleRouteVisibility,
@@ -41,9 +44,14 @@ export function RouteListPanel() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [routeToDelete, setRouteToDelete] = useState<Route | null>(null);
 
+  // Set default post office to first item
+  useEffect(() => {
+    if (postOffices && postOffices.length > 0 && !filterPostOfficeId) {
+      setFilterPostOfficeId(postOffices[0].id);
+    }
+  }, [postOffices, filterPostOfficeId, setFilterPostOfficeId]);
+
   const filteredRoutes = routes.filter((route) => {
-    if (filterPostOfficeId && route.postOfficeId !== filterPostOfficeId) return false;
-    if (filterRouteType && route.type !== filterRouteType) return false;
     if (searchTerm && !route.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
     return true;
   });
@@ -63,7 +71,7 @@ export function RouteListPanel() {
         </div>
 
         {/* Search */}
-        <div className="relative mb-3">
+        {/* <div className="relative mb-3">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Tìm kiếm tuyến..."
@@ -71,24 +79,23 @@ export function RouteListPanel() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-9"
           />
-        </div>
+        </div> */}
 
         {/* Filters */}
         <div className="space-y-2">
           {/* Post Office and Route Type Filters */}
           <div className="flex gap-2">
             <Select
-              value={filterPostOfficeId || 'all'}
-              onValueChange={(v) => setFilterPostOfficeId(v === 'all' ? null : v)}
+              value={filterPostOfficeId || undefined}
+              onValueChange={(v) => setFilterPostOfficeId(v)}
             >
               <SelectTrigger className="flex-1 h-9">
-                <SelectValue placeholder="Bưu cục" />
+                <SelectValue placeholder="Chọn bưu cục" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả BC</SelectItem>
-                {postOffices.map((po) => (
+                {postOffices?.map((po) => (
                   <SelectItem key={po.id} value={po.id}>
-                    {po.code}
+                    {po?.name} ({po.code})
                   </SelectItem>
                 ))}
               </SelectContent>

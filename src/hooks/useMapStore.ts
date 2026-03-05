@@ -44,6 +44,7 @@ interface MapState {
   setEditingRouteId: (id: string | null) => void;
   setEditMode: (mode: 'vertices' | 'drag' | null) => void;
   toggleRouteVisibility: (id: string) => void;
+  setRoutes: (routes: Route[]) => void;
   addRoute: (route: Route) => void;
   updateRoute: (id: string, updates: Partial<Route>) => void;
   deleteRoute: (id: string) => void;
@@ -193,6 +194,8 @@ export const useMapStore = create<MapState>((set, get) => ({
         route.id === id ? { ...route, isVisible: !route.isVisible } : route
       ),
     })),
+  
+  setRoutes: (routes) => set({ routes }),
   
   addRoute: (route) =>
     set((state) => ({ routes: [...state.routes, route] })),

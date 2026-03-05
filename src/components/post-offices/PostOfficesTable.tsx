@@ -30,7 +30,7 @@ export function PostOfficesTable({
   onDelete,
 }: PostOfficesTableProps) {
   return (
-    <div className="flex-1 bg-card rounded-lg border border-border overflow-hidden">
+    <div className="flex-1 bg-card rounded-lg border border-border overflow-auto">
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/50">
