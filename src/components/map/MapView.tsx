@@ -6,7 +6,7 @@ import "@geoman-io/leaflet-geoman-free";
 import "@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css";
 import { useMapStore } from "@/hooks/useMapStore";
 import { useCheckPoint } from "@/hooks/useCheckPoint";
-import { PostOffice } from "@/types";
+import { PostOffice, OperationalArea } from "@/types";
 import { routeTypeLabels } from "@/constants";
 import { CheckPointButton, CheckPointResult } from "./CheckPointButton";
 
@@ -50,9 +50,10 @@ function createPostOfficeIcon() {
 interface MapViewProps {
   onPolygonCreated?: (polygon: Array<{ lat: number; lng: number }>, layer: L.Layer) => void;
   postOffices?: PostOffice[];
+  operationalAreas?: OperationalArea[];
 }
 
-export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
+export function MapView({ onPolygonCreated, postOffices, operationalAreas = [] }: MapViewProps) {
   const {
     routes,
     selectedRouteId,
@@ -80,6 +81,7 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const routeLayerRef = useRef<L.LayerGroup | null>(null);
+  const operationalAreaLayerRef = useRef<L.LayerGroup | null>(null);
   const postOfficeLayerRef = useRef<L.LayerGroup | null>(null);
   const drawingLayerRef = useRef<L.LayerGroup | null>(null);
   const tileLayerRef = useRef<L.TileLayer | null>(null);
@@ -88,6 +90,8 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
   // Track layer-to-route mapping
   const layerToRouteMap = useRef<Map<number, string>>(new Map());
   const routeToLayerMap = useRef<Map<string, L.Polygon>>(new Map());
+  // Track operational area layers
+  const operationalAreaToLayerMap = useRef<Map<string, L.Polygon>>(new Map());
 
   
   // Map layer type state
@@ -99,7 +103,13 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
     [routes]
   );
 
+  const visibleOperationalAreas = useMemo(
+    () => operationalAreas.filter((a) => a.isVisible),
+    [operationalAreas]
+  );
+
   console.log('Visible routes:', visibleRoutes);
+  console.log('Visible operational areas:', visibleOperationalAreas);
 
   // 1) Initialize the Leaflet map once
   useEffect(() => {
@@ -124,6 +134,7 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
     tileLayerRef.current = initialTileLayer;
 
     routeLayerRef.current = L.layerGroup().addTo(map);
+    operationalAreaLayerRef.current = L.layerGroup().addTo(map);
     postOfficeLayerRef.current = L.layerGroup().addTo(map);
     drawingLayerRef.current = L.layerGroup().addTo(map);
 
@@ -531,6 +542,101 @@ export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
       marker.addTo(postOfficeLayer);
     });
   }, [postOffices, visibleRoutes, selectedRouteId, setSelectedRoute, highlightedRouteIds, saveOriginalPolygon]);
+
+  // Render operational areas
+  useEffect(() => {
+    const operationalAreaLayer = operationalAreaLayerRef.current;
+    const map = mapRef.current;
+
+    if (!operationalAreaLayer || !map) return;
+
+    // Track which operational areas we're processing
+    const processedAreaIds = new Set<string>();
+
+    // Update or create polygons for visible operational areas
+    visibleOperationalAreas.forEach((area) => {
+      processedAreaIds.add(area.id);
+      
+      // Check if layer already exists
+      let polygon = operationalAreaToLayerMap.current.get(area.id);
+      
+      if (polygon && operationalAreaLayer.hasLayer(polygon)) {
+        // Update polygon coordinates
+        const newLatLngs = area.polygon.map((p) => [p.lat, p.lng] as [number, number]);
+        polygon.setLatLngs(newLatLngs);
+        
+        // Update style - operational areas have dashed border to distinguish from routes
+        polygon.setStyle({
+          color: area.color,
+          fillColor: "transparent",
+          fillOpacity: 0.15,
+          weight: 2,
+          dashArray: '8, 4',
+        });
+        
+        // Update tooltip
+        polygon.unbindTooltip();
+        polygon.bindTooltip(
+          `<div style="font-size: 12px; line-height: 1.35;">
+            <div style="font-weight: 600; margin-bottom: 2px;">${area.name}</div>
+            ${area.postOfficeName ? `<div style="opacity: 0.8;">Bưu cục: ${area.postOfficeName}</div>` : ""}
+            ${area.productType && area.productType.length > 0 ? `<div style="opacity: 0.8;">Loại hàng hóa: ${area.productType.join(', ')}</div>` : ""}
+            <div style="opacity: 0.7;">Diện tích: ${(area.area / 1000000).toFixed(2)} km²</div>
+          </div>`,
+          { sticky: true }
+        );
+      } else {
+        // Create new polygon for operational area
+        polygon = L.polygon(
+          area.polygon.map((p) => [p.lat, p.lng] as [number, number]),
+          {
+            color: area.color,
+            fillColor: "transparent",
+            fillOpacity: 0.15,
+            weight: 2,
+            dashArray: '8, 4', // Dashed border to distinguish from routes
+            pmIgnore: false,
+          }
+        );
+
+        // Track layer mapping
+        operationalAreaToLayerMap.current.set(area.id, polygon);
+
+        // polygon.on("mouseover", () => {
+        //   polygon.setStyle({ 
+        //     weight: 3, 
+        //     fillOpacity: 0.25 
+        //   });
+        // });
+        // polygon.on("mouseout", () => {
+        //   polygon.setStyle({
+        //     weight: 2,
+        //     fillOpacity: 0.15,
+        //   });
+        // });
+
+        polygon.bindTooltip(
+          `<div style="font-size: 12px; line-height: 1.35;">
+            <div style="font-weight: 600; margin-bottom: 2px;">${area.name}</div>
+            ${area.postOfficeName ? `<div style="opacity: 0.8;">Bưu cục: ${area.postOfficeName}</div>` : ""}
+            ${area.productType && area.productType.length > 0 ? `<div style="opacity: 0.8;">Loại hàng hóa: ${area.productType.join(', ')}</div>` : ""}
+            <div style="opacity: 0.7;">Diện tích: ${(area.area / 1000000).toFixed(2)} km²</div>
+          </div>`,
+          { sticky: true }
+        );
+
+        polygon.addTo(operationalAreaLayer);
+      }
+    });
+    
+    // Remove layers for operational areas that are no longer visible or deleted
+    operationalAreaToLayerMap.current.forEach((layer, areaId) => {
+      if (!processedAreaIds.has(areaId)) {
+        operationalAreaToLayerMap.current.delete(areaId);
+        operationalAreaLayer.removeLayer(layer);
+      }
+    });
+  }, [visibleOperationalAreas]);
 
   // 5) Render current drawing polygon (legacy click-based drawing only)
   // Note: This effect is for the legacy drawing system. Geoman shapes are managed separately.

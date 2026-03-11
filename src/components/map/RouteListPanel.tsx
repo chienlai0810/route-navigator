@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useMapStore } from '@/hooks/useMapStore';
-import { RouteType, Route, PostOffice } from '@/types';
+import { RouteType, Route, PostOffice, ProductType, OperationalArea } from '@/types';
 import {
   Select,
   SelectContent,
@@ -20,23 +20,26 @@ import {
 import { useState, useEffect } from 'react';
 import { Search, Filter } from 'lucide-react';
 import { DeleteRouteModal } from '../routes';
-import { routeTypeLabels, routeTypeColors } from '@/constants';
+import { routeTypeLabels, routeTypeColors, productTypeOptions } from '@/constants';
 import { CheckPointInput } from './CheckPointInput';
 
 interface IProps {
   postOffices?: PostOffice[];
+  operatingAreas?: OperationalArea[]; 
 }
 
-export function RouteListPanel({ postOffices }: IProps) {
+export function RouteListPanel({ postOffices, operatingAreas }: IProps) {
   const {
     routes,
     selectedRouteId,
     setSelectedRoute,
     toggleRouteVisibility,
     filterPostOfficeId,
-    filterRouteType,
+    filterProductType,
+    filterOperationalAreaId,
     setFilterPostOfficeId,
-    setFilterRouteType,
+    setFilterProductType,
+    setFilterOperationalAreaId,
     highlightedRouteIds,
   } = useMapStore();
 
@@ -52,8 +55,7 @@ export function RouteListPanel({ postOffices }: IProps) {
   }, [postOffices, filterPostOfficeId, setFilterPostOfficeId]);
 
   const filteredRoutes = routes.filter((route) => {
-    if (searchTerm && !route.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;
-    return true;
+    if (searchTerm && !route.name.toLowerCase().includes(searchTerm.toLowerCase())) return false;    return true;
   });
 
   return (
@@ -102,16 +104,39 @@ export function RouteListPanel({ postOffices }: IProps) {
             </Select>
 
             <Select
-              value={filterRouteType || 'all'}
-              onValueChange={(v) => setFilterRouteType(v === 'all' ? null : (v as RouteType))}
+              value={filterProductType || 'all'}
+              onValueChange={(v) => setFilterProductType(v === 'all' ? null : (v as ProductType))}
             >
               <SelectTrigger className="flex-1 h-9">
-                <SelectValue placeholder="Loại" />
+                <SelectValue placeholder="Loại hàng hóa" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Tất cả loại</SelectItem>
-                <SelectItem value="delivery">Giao hàng</SelectItem>
-                <SelectItem value="pickup">Nhận hàng</SelectItem>
+                <SelectItem value="all">Tất cả loại hàng hóa</SelectItem>
+                {productTypeOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Operational Area Filter */}
+          <div>
+            <Select
+              value={filterOperationalAreaId || 'all'}
+              onValueChange={(v) => setFilterOperationalAreaId(v === 'all' ? null : v)}
+            >
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Vùng hoạt động" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả vùng hoạt động</SelectItem>
+                {operatingAreas?.map((area) => (
+                  <SelectItem key={area.id} value={area.id}>
+                    {area.name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>

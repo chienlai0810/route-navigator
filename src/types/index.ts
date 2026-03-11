@@ -59,6 +59,20 @@ export interface Route {
   updatedAt: Date;
 }
 
+export interface OperationalArea {
+  id: string;
+  name: string;
+  postOfficeId: string;
+  postOfficeName?: string;
+  productType: ProductType[];
+  color: string;
+  polygon: Array<{ lat: number; lng: number }>;
+  area: number; // in m²
+  isVisible: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 export interface Employee {
   id: string;
   name: string;

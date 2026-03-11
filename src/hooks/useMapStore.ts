@@ -1,10 +1,11 @@
 import { create } from 'zustand';
-import { Route, PostOffice, DrawingTool, Settings, RouteType } from '@/types';
+import { Route, PostOffice, DrawingTool, Settings, ProductType, OperationalArea } from '@/types';
 import L from 'leaflet';
 
 interface MapState {
   // Data
   routes: Route[];
+  operationalAreas: OperationalArea[];
   postOffices: PostOffice[];
   selectedRouteId: string | null;
   selectedPostOfficeId: string | null;
@@ -22,7 +23,8 @@ interface MapState {
   // UI State
   showRoutePanel: boolean;
   filterPostOfficeId: string | null;
-  filterRouteType: RouteType | null;
+  filterProductType: ProductType | null;
+  filterOperationalAreaId: string | null;
   filterEmployeeId: string | null;
   filterCity: string | null;
   filterDistrict: string | null;
@@ -48,11 +50,15 @@ interface MapState {
   addRoute: (route: Route) => void;
   updateRoute: (id: string, updates: Partial<Route>) => void;
   deleteRoute: (id: string) => void;
+  setOperationalAreas: (areas: OperationalArea[]) => void;
+  addOperationalArea: (area: OperationalArea) => void;
+  toggleOperationalAreaVisibility: (id: string) => void;
   addPostOffice: (postOffice: PostOffice) => void;
   updatePostOffice: (id: string, updates: Partial<PostOffice>) => void;
   setShowRoutePanel: (show: boolean) => void;
   setFilterPostOfficeId: (id: string | null) => void;
-  setFilterRouteType: (type: RouteType | null) => void;
+  setFilterProductType: (type: ProductType | null) => void;
+  setFilterOperationalAreaId: (id: string | null) => void;
   setFilterCity: (city: string | null) => void;
   setFilterDistrict: (district: string | null) => void;
   setIsDrawing: (isDrawing: boolean) => void;
@@ -133,6 +139,7 @@ const mockRoutes: Route[] = [
 export const useMapStore = create<MapState>((set, get) => ({
   // Initial Data
   routes: [],
+  operationalAreas: [],
   postOffices: [],
   selectedRouteId: null,
   selectedPostOfficeId: null,
@@ -150,7 +157,8 @@ export const useMapStore = create<MapState>((set, get) => ({
   // UI State
   showRoutePanel: true,
   filterPostOfficeId: null,
-  filterRouteType: null,
+  filterProductType: null,
+  filterOperationalAreaId: null,
   filterEmployeeId: null,
   filterCity: null,
   filterDistrict: null,
@@ -213,6 +221,18 @@ export const useMapStore = create<MapState>((set, get) => ({
       selectedRouteId: state.selectedRouteId === id ? null : state.selectedRouteId,
     })),
   
+  setOperationalAreas: (areas) => set({ operationalAreas: areas }),
+  
+  addOperationalArea: (area) =>
+    set((state) => ({ operationalAreas: [...state.operationalAreas, area] })),
+  
+  toggleOperationalAreaVisibility: (id) =>
+    set((state) => ({
+      operationalAreas: state.operationalAreas.map((area) =>
+        area.id === id ? { ...area, isVisible: !area.isVisible } : area
+      ),
+    })),
+  
   addPostOffice: (postOffice) =>
     set((state) => ({ postOffices: [...state.postOffices, postOffice] })),
   
@@ -227,7 +247,9 @@ export const useMapStore = create<MapState>((set, get) => ({
   
   setFilterPostOfficeId: (id) => set({ filterPostOfficeId: id }),
   
-  setFilterRouteType: (type) => set({ filterRouteType: type }),
+  setFilterProductType: (type) => set({ filterProductType: type }),
+  
+  setFilterOperationalAreaId: (id) => set({ filterOperationalAreaId: id }),
   
   setFilterCity: (city) => set({ filterCity: city, filterDistrict: null }),
   

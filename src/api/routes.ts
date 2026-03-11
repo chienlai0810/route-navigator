@@ -58,6 +58,7 @@ export interface CreateRoutePayload {
   staffMain: string;
   area: RouteAreaPayload;
   postOfficeId: string;
+  operatingAreaId?: string;
 }
 
 export interface UpdateRoutePayload {
@@ -97,6 +98,8 @@ export interface CheckPointResponse {
 export interface RouteQueryParams {
   postOfficeId?: string | null;
   type?: RouteType | null;
+  productType?: string | null; // Format: "HH", "TH", or "HH;TH"
+  operatingAreaId?: string | null;
 }
 
 // API service cho Routes
@@ -112,7 +115,15 @@ export const routesApi = {
     if (params?.type) {
       queryParams.append('type', params.type);
     }
+
+    if (params?.productType) {
+      queryParams.append('productType', params.productType);
+    }
     
+    if (params?.operatingAreaId) {
+      queryParams.append('operatingAreaId', params.operatingAreaId);
+    }
+
     const queryString = queryParams.toString();
     const url = queryString ? `/routes?${queryString}` : '/routes';
     

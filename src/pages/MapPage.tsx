@@ -7,8 +7,9 @@ import L from 'leaflet';
 import { EditRoutePanel } from '@/components/map/EditRoutePanel';
 import { postOfficesApi } from '@/api/postOffices';
 import { routesApi, RouteResponse } from '@/api/routes';
+import { operationalAreasApi, OperationalAreaResponse } from '@/api/operationalAreas';
 import { useQuery } from '@tanstack/react-query';
-import { Route, RouteType } from '@/types';
+import { Route, RouteType, OperationalArea } from '@/types';
 
 export default function MapPage() {
   const { 
@@ -16,9 +17,11 @@ export default function MapPage() {
     showRoutePanel, 
     setSelectedRoute, 
     setRoutes,
+    setOperationalAreas,
     settings,
     filterPostOfficeId,
-    filterRouteType,
+    filterProductType,
+    filterOperationalAreaId
   } = useMapStore();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -30,18 +33,14 @@ export default function MapPage() {
     queryFn: () => postOfficesApi.getAll(),
   });
 
-  // Fetch routes từ API với filter params
+  // Fetch routes từ API
   const { data: apiRoutes = [] } = useQuery({
-    queryKey: ['routes', filterPostOfficeId, filterRouteType],
+    queryKey: ['routes', filterPostOfficeId, filterProductType, filterOperationalAreaId],
     queryFn: () => {
-      // Convert local RouteType to API RouteType (uppercase)
-      const apiRouteType = filterRouteType 
-        ? (filterRouteType.toUpperCase() as 'DELIVERY' | 'PICKUP' | 'ALL')
-        : null;
-      
       return routesApi.getAll({
         postOfficeId: filterPostOfficeId,
-        type: apiRouteType,
+        productType: filterProductType,
+        operatingAreaId: filterOperationalAreaId,
       });
     },
   });
@@ -103,6 +102,79 @@ export default function MapPage() {
     });
   }, [apiRoutes, settings, postOffices]);
 
+  // Fetch operational areas từ API
+  const { data: apiOperationalAreas = [] } = useQuery({
+    queryKey: ['operational-areas', filterPostOfficeId, filterProductType, filterOperationalAreaId],
+    queryFn: () => operationalAreasApi.getAll({
+      postOfficeId: filterPostOfficeId,
+      productType: filterProductType,
+      operatingAreaId: filterOperationalAreaId,
+    }),
+  });
+
+  // Transform API operational areas to local format (memoized)
+  const localOperationalAreas = useMemo(() => {
+    if (apiOperationalAreas.length === 0) return [];
+    
+    return apiOperationalAreas.map((apiArea: OperationalAreaResponse) => {
+      // Compute area
+      const computeArea = (polygon: Array<{ lat: number; lng: number }>) => {
+        if (polygon.length < 3) return 0;
+        const R = 6371000;
+        let area = 0;
+        for (let i = 0; i < polygon.length; i++) {
+          const j = (i + 1) % polygon.length;
+          const lat1 = (polygon[i].lat * Math.PI) / 180;
+          const lat2 = (polygon[j].lat * Math.PI) / 180;
+          const lng1 = (polygon[i].lng * Math.PI) / 180;
+          const lng2 = (polygon[j].lng * Math.PI) / 180;
+          area += (lng2 - lng1) * (2 + Math.sin(lat1) + Math.sin(lat2));
+        }
+        return Math.abs((area * R * R) / 2);
+      };
+
+      // Convert GeoJSON points to polygon coordinates
+      const polygon = apiArea.area.points.map(point => ({
+        lat: point.y,
+        lng: point.x
+      }));
+
+      const area = computeArea(polygon);
+
+      // Parse productType from string format "HH;TH" to array
+      const productTypeArray: ('HH' | 'KH' | 'TH')[] = apiArea.productType 
+        ? apiArea.productType.split(';').filter(Boolean) as ('HH' | 'KH' | 'TH')[]
+        : [];
+
+      // Create local operational area from API data
+      // Use a purple color for operational areas to distinguish from routes
+      return {
+        id: apiArea.id,
+        name: apiArea.name,
+        postOfficeId: apiArea.postOfficeId,
+        postOfficeName: apiArea.postOfficeName,
+        productType: productTypeArray,
+        color: apiArea.color || '#9333ea', // Purple color for operational areas
+        polygon,
+        area,
+        isVisible: true,
+        createdAt: new Date(apiArea.createdAt),
+        updatedAt: new Date(apiArea.updatedAt),
+      };
+    });
+  }, [apiOperationalAreas]);
+
+  // Sync operational areas to zustand store
+  const prevOperationalAreasRef = useRef<string>('');
+  useEffect(() => {
+    const areasKey = localOperationalAreas.map(a => a.id).sort().join(',');
+    
+    if (prevOperationalAreasRef.current !== areasKey) {
+      prevOperationalAreasRef.current = areasKey;
+      setOperationalAreas(localOperationalAreas);
+    }
+  }, [localOperationalAreas, setOperationalAreas]);
+
   // Sync routes to zustand store (only when localRoutes change)
   const prevRoutesRef = useRef<string>('');
   useEffect(() => {
@@ -158,10 +230,10 @@ export default function MapPage() {
 
   return (
     <div className="h-full flex">
-      {showRoutePanel && <RouteListPanel postOffices={postOffices} />}
+      {showRoutePanel && <RouteListPanel postOffices={postOffices} operatingAreas={localOperationalAreas} />}
 
       <div className="flex-1 relative">
-        <MapView onPolygonCreated={handlePolygonCreated} postOffices={postOffices} />
+        <MapView onPolygonCreated={handlePolygonCreated} postOffices={postOffices} operationalAreas={localOperationalAreas} />
 
         {/* Map Legend */}
         <div className="absolute bottom-6 left-6 z-[1000] bg-card/95 backdrop-blur-sm rounded-lg shadow-lg p-3 text-xs">
