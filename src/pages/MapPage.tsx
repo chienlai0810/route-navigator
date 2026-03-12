@@ -5,6 +5,7 @@ import { NewRouteDrawer } from '@/components/map/NewRouteDrawer';
 import { useMapStore } from '@/hooks/useMapStore';
 import L from 'leaflet';
 import { EditRoutePanel } from '@/components/map/EditRoutePanel';
+import { EditOperatingArea } from '@/components/map/EditOperatingArea';
 import { postOfficesApi } from '@/api/postOffices';
 import { routesApi, RouteResponse } from '@/api/routes';
 import { operationalAreasApi, OperationalAreaResponse } from '@/api/operationalAreas';
@@ -13,9 +14,11 @@ import { Route, RouteType, OperationalArea } from '@/types';
 
 export default function MapPage() {
   const { 
-    selectedRouteId, 
+    selectedRouteId,
+    selectedOperationalAreaId, 
     showRoutePanel, 
-    setSelectedRoute, 
+    setSelectedRoute,
+    setSelectedOperationalArea, 
     setRoutes,
     setOperationalAreas,
     settings,
@@ -91,6 +94,7 @@ export default function MapPage() {
         productType: productTypeArray,
         color: apiRoute.color || settings.routeColors[localType],
         postOfficeId: apiRoute.postOfficeId || (postOffices && postOffices[0]?.id) || '',
+        operatingAreaId: apiRoute.operatingAreaId || '',
         assignedEmployeeName: apiRoute.staffMain,
         assignedEmployeeId: undefined,
         polygon,
@@ -104,11 +108,10 @@ export default function MapPage() {
 
   // Fetch operational areas từ API
   const { data: apiOperationalAreas = [] } = useQuery({
-    queryKey: ['operational-areas', filterPostOfficeId, filterProductType, filterOperationalAreaId],
+    queryKey: ['operational-areas', filterPostOfficeId, filterProductType],
     queryFn: () => operationalAreasApi.getAll({
       postOfficeId: filterPostOfficeId,
       productType: filterProductType,
-      operatingAreaId: filterOperationalAreaId,
     }),
   });
 
@@ -188,9 +191,9 @@ export default function MapPage() {
     }
   }, [localRoutes, setRoutes]);
 
-  // Đóng NewRouteDrawer khi EditRoutePanel mở
+  // Đóng NewRouteDrawer khi EditRoutePanel hoặc EditOperatingArea mở
   useEffect(() => {
-    if (selectedRouteId && drawerOpen) {
+    if ((selectedRouteId || selectedOperationalAreaId) && drawerOpen) {
       setDrawerOpen(false);
       if (pendingLayer) {
         (pendingLayer as any).remove?.();
@@ -198,15 +201,16 @@ export default function MapPage() {
       }
       setPendingPolygon(null);
     }
-  }, [selectedRouteId, drawerOpen, pendingLayer]);
+  }, [selectedRouteId, selectedOperationalAreaId, drawerOpen, pendingLayer]);
 
   const handlePolygonCreated = useCallback((polygon: Array<{ lat: number; lng: number }>, layer: L.Layer) => {
-    // Đóng EditRoutePanel khi mở NewRouteDrawer
+    // Đóng EditRoutePanel và EditOperatingArea khi mở NewRouteDrawer
     setSelectedRoute(null);
+    setSelectedOperationalArea(null);
     setPendingPolygon(polygon);
     setPendingLayer(layer);
     setDrawerOpen(true);
-  }, [setSelectedRoute]);
+  }, [setSelectedRoute, setSelectedOperationalArea]);
 
   const handleSaved = useCallback(() => {
     setDrawerOpen(false);
@@ -233,7 +237,7 @@ export default function MapPage() {
       {showRoutePanel && <RouteListPanel postOffices={postOffices} operatingAreas={localOperationalAreas} />}
 
       <div className="flex-1 relative">
-        <MapView onPolygonCreated={handlePolygonCreated} postOffices={postOffices} operationalAreas={localOperationalAreas} />
+        <MapView onPolygonCreated={handlePolygonCreated} postOffices={postOffices} />
 
         {/* Map Legend */}
         <div className="absolute bottom-6 left-6 z-[1000] bg-card/95 backdrop-blur-sm rounded-lg shadow-lg p-3 text-xs">
@@ -260,11 +264,18 @@ export default function MapPage() {
               />
               <span className="text-muted-foreground">Tất cả</span>
             </div>
+            <div className="flex items-center gap-2">
+              <div 
+                className="w-3 h-3 rounded-full border border-purple-500 border-dashed"
+              />
+              <span className="text-muted-foreground">Vùng hoạt động</span>
+            </div>
           </div>
         </div>
       </div>
 
       {selectedRouteId && <EditRoutePanel postOffices={postOffices} />}
+      {selectedOperationalAreaId && <EditOperatingArea postOffices={postOffices} />}
 
       <NewRouteDrawer
         open={drawerOpen}

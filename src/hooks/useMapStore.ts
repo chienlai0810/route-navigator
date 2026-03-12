@@ -8,12 +8,15 @@ interface MapState {
   operationalAreas: OperationalArea[];
   postOffices: PostOffice[];
   selectedRouteId: string | null;
+  selectedOperationalAreaId: string | null;
   selectedPostOfficeId: string | null;
   editingRouteId: string | null;
+  editingOperationalAreaId: string | null;
   editMode: 'vertices' | 'drag' | null;
   
   // Original polygons for reset functionality
   originalPolygons: Map<string, Array<{ lat: number; lng: number }>>;
+  originalOperationalAreaPolygons: Map<string, Array<{ lat: number; lng: number }>>;
   
   // Drawing
   activeTool: DrawingTool;
@@ -42,8 +45,10 @@ interface MapState {
   // Actions
   setActiveTool: (tool: DrawingTool) => void;
   setSelectedRoute: (id: string | null, zoomTo?: boolean) => void;
+  setSelectedOperationalArea: (id: string | null, zoomTo?: boolean) => void;
   setSelectedPostOffice: (id: string | null) => void;
   setEditingRouteId: (id: string | null) => void;
+  setEditingOperationalAreaId: (id: string | null) => void;
   setEditMode: (mode: 'vertices' | 'drag' | null) => void;
   toggleRouteVisibility: (id: string) => void;
   setRoutes: (routes: Route[]) => void;
@@ -52,6 +57,7 @@ interface MapState {
   deleteRoute: (id: string) => void;
   setOperationalAreas: (areas: OperationalArea[]) => void;
   addOperationalArea: (area: OperationalArea) => void;
+  updateOperationalArea: (id: string, updates: Partial<OperationalArea>) => void;
   toggleOperationalAreaVisibility: (id: string) => void;
   addPostOffice: (postOffice: PostOffice) => void;
   updatePostOffice: (id: string, updates: Partial<PostOffice>) => void;
@@ -71,6 +77,8 @@ interface MapState {
   resetAllPolygons: () => void;
   saveOriginalPolygon: (routeId: string, polygon: Array<{ lat: number; lng: number }>) => void;
   revertPolygon: (routeId: string) => void;
+  saveOriginalOperationalAreaPolygon: (areaId: string, polygon: Array<{ lat: number; lng: number }>) => void;
+  revertOperationalAreaPolygon: (areaId: string) => void;
   setHighlightedRouteIds: (ids: string[]) => void;
   setCheckPointLocation: (location: { lat: number; lng: number } | null) => void;
 }
@@ -142,12 +150,15 @@ export const useMapStore = create<MapState>((set, get) => ({
   operationalAreas: [],
   postOffices: [],
   selectedRouteId: null,
+  selectedOperationalAreaId: null,
   selectedPostOfficeId: null,
   editingRouteId: null,
+  editingOperationalAreaId: null,
   editMode: null,
   
   // Original polygons - initialize with current routes
   originalPolygons: new Map(mockRoutes.map(r => [r.id, [...r.polygon]])),
+  originalOperationalAreaPolygons: new Map(),
   
   // Drawing State
   activeTool: null,
@@ -184,15 +195,31 @@ export const useMapStore = create<MapState>((set, get) => ({
   setActiveTool: (tool) => set({ activeTool: tool, isDrawing: tool === 'draw' }),
   
   setSelectedRoute: (id, zoomTo = false) => {
-    set({ selectedRouteId: id });
+    set({ selectedRouteId: id, selectedOperationalAreaId: null });
     if (zoomTo && id) {
       get().zoomToRoute(id);
+    }
+  },
+  
+  setSelectedOperationalArea: (id, zoomTo = false) => {
+    set({ selectedOperationalAreaId: id, selectedRouteId: null });
+    if (zoomTo && id) {
+      const state = get();
+      const area = state.operationalAreas.find(a => a.id === id);
+      const map = state.mapInstance;
+      
+      if (!area || !map || area.polygon.length === 0) return;
+      
+      const bounds = L.latLngBounds(area.polygon.map(p => [p.lat, p.lng] as [number, number]));
+      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
     }
   },
   
   setSelectedPostOffice: (id) => set({ selectedPostOfficeId: id }),
   
   setEditingRouteId: (id) => set({ editingRouteId: id }),
+  
+  setEditingOperationalAreaId: (id) => set({ editingOperationalAreaId: id }),
   
   setEditMode: (mode) => set({ editMode: mode }),
   
@@ -225,6 +252,13 @@ export const useMapStore = create<MapState>((set, get) => ({
   
   addOperationalArea: (area) =>
     set((state) => ({ operationalAreas: [...state.operationalAreas, area] })),
+  
+  updateOperationalArea: (id, updates) =>
+    set((state) => ({
+      operationalAreas: state.operationalAreas.map((area) =>
+        area.id === id ? { ...area, ...updates, updatedAt: new Date() } : area
+      ),
+    })),
   
   toggleOperationalAreaVisibility: (id) =>
     set((state) => ({
@@ -350,6 +384,32 @@ export const useMapStore = create<MapState>((set, get) => ({
             route.id === routeId 
               ? { ...route, polygon: [...originalPolygon] }
               : route
+          ),
+        };
+      }
+      return state;
+    });
+  },
+  
+  saveOriginalOperationalAreaPolygon: (areaId, polygon) => {
+    set((state) => {
+      const newOriginalPolygons = new Map(state.originalOperationalAreaPolygons);
+      if (!newOriginalPolygons.has(areaId)) {
+        newOriginalPolygons.set(areaId, [...polygon]);
+      }
+      return { originalOperationalAreaPolygons: newOriginalPolygons };
+    });
+  },
+  
+  revertOperationalAreaPolygon: (areaId) => {
+    set((state) => {
+      const originalPolygon = state.originalOperationalAreaPolygons.get(areaId);
+      if (originalPolygon) {
+        return {
+          operationalAreas: state.operationalAreas.map((area) =>
+            area.id === areaId 
+              ? { ...area, polygon: [...originalPolygon] }
+              : area
           ),
         };
       }

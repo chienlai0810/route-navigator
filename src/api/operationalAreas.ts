@@ -52,6 +52,17 @@ export interface OperationalAreaQueryParams {
   operatingAreaId?: string | null;
 }
 
+// Operating area status response
+export interface OperatingAreaStatusResponse {
+  operatingAreaId: string;
+  operatingAreaName: string;
+  hasRoutes: boolean;
+  routeCount: number;
+  canDelete: boolean;
+  canUpdate: boolean;
+  message: string;
+}
+
 export const operationalAreasApi = {
   // Get all operational areas with optional filters
   getAll: async (params?: OperationalAreaQueryParams): Promise<OperationalAreaResponse[]> => {
@@ -84,6 +95,14 @@ export const operationalAreasApi = {
     const response = await axiosInstance.put<ApiResponse<OperationalAreaResponse>>(
       `/operating-areas/${id}`,
       payload
+    );
+    return response.data.data;
+  },
+
+  // Get operating area status (check if it can be deleted/updated)
+  getStatus: async (id: string): Promise<OperatingAreaStatusResponse> => {
+    const response = await axiosInstance.get<ApiResponse<OperatingAreaStatusResponse>>(
+      `/operating-areas/${id}/status`
     );
     return response.data.data;
   },

@@ -50,24 +50,28 @@ function createPostOfficeIcon() {
 interface MapViewProps {
   onPolygonCreated?: (polygon: Array<{ lat: number; lng: number }>, layer: L.Layer) => void;
   postOffices?: PostOffice[];
-  operationalAreas?: OperationalArea[];
 }
 
-export function MapView({ onPolygonCreated, postOffices, operationalAreas = [] }: MapViewProps) {
+export function MapView({ onPolygonCreated, postOffices }: MapViewProps) {
   const {
     routes,
     selectedRouteId,
     setSelectedRoute,
+    setSelectedOperationalArea,
     currentPolygon,
     activeTool,
     setActiveTool,
     updateRoute,
+    updateOperationalArea,
     setMapInstance,
     saveOriginalPolygon,
     editingRouteId,
+    editingOperationalAreaId,
     editMode,
     highlightedRouteIds,
     checkPointLocation,
+    operationalAreas,
+    filterOperationalAreaId,
   } = useMapStore();
 
   const {
@@ -103,10 +107,16 @@ export function MapView({ onPolygonCreated, postOffices, operationalAreas = [] }
     [routes]
   );
 
-  const visibleOperationalAreas = useMemo(
-    () => operationalAreas.filter((a) => a.isVisible),
-    [operationalAreas]
-  );
+  const visibleOperationalAreas = useMemo(() => {
+    let filtered = operationalAreas.filter((a) => a.isVisible);
+    
+    // Apply operationalAreaId filter if set
+    if (filterOperationalAreaId) {
+      filtered = filtered.filter((a) => a.id === filterOperationalAreaId);
+    }
+    
+    return filtered;
+  }, [operationalAreas, filterOperationalAreaId]);
 
   console.log('Visible routes:', visibleRoutes);
   console.log('Visible operational areas:', visibleOperationalAreas);
@@ -615,6 +625,11 @@ export function MapView({ onPolygonCreated, postOffices, operationalAreas = [] }
         //   });
         // });
 
+        // Add double click handler to open edit panel
+        polygon.on("dblclick", () => {
+          setSelectedOperationalArea(area.id, true);
+        });
+
         polygon.bindTooltip(
           `<div style="font-size: 12px; line-height: 1.35;">
             <div style="font-weight: 600; margin-bottom: 2px;">${area.name}</div>
@@ -812,6 +827,82 @@ export function MapView({ onPolygonCreated, postOffices, operationalAreas = [] }
       }
     }
   }, [editingRouteId, editMode, updateRoute]);
+
+  // Enable/disable polygon editing for operational areas
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Cleanup all operational area polygons - remove listeners and disable all modes
+    operationalAreaToLayerMap.current.forEach((polygon) => {
+      if (polygon.pm) {
+        polygon.off('pm:edit');
+        polygon.off('pm:drag');
+        polygon.off('pm:dragstart');
+        polygon.off('pm:dragend');
+        polygon.pm.disable();
+        polygon.pm.disableLayerDrag();
+        const element = polygon.getElement();
+        if (element) {
+          (element as HTMLElement).style.cursor = '';
+        }
+      }
+    });
+
+    // Enable editing on the selected operational area if editingOperationalAreaId is set
+    if (editingOperationalAreaId && editMode) {
+      const polygon = operationalAreaToLayerMap.current.get(editingOperationalAreaId);
+      if (polygon && polygon.pm) {
+        
+        // Listen for edit events
+        const handleEdit = (e: any) => {
+          const layer = e.layer || e.target;
+          if (layer) {
+            const newLatLngs = layer.getLatLngs()[0];
+            const newPolygon = newLatLngs.map((latlng: L.LatLng) => ({
+              lat: latlng.lat,
+              lng: latlng.lng,
+            }));
+            // Update the operational area in store with new polygon
+            updateOperationalArea(editingOperationalAreaId, { polygon: newPolygon });
+          }
+        };
+
+        if (editMode === 'vertices') {
+          // Enable vertex editing only
+          polygon.pm.enable({
+            allowSelfIntersection: false,
+            preventMarkerRemoval: true,
+            draggable: false,
+            snappable: true,
+            snapDistance: 20,
+            hideMiddleMarkers: false,
+          });
+          polygon.on('pm:edit', handleEdit);
+          const element = polygon.getElement();
+          if (element) {
+            (element as HTMLElement).style.cursor = 'default';
+          }
+        } else if (editMode === 'drag') {
+          // Enable dragging the entire polygon
+          polygon.pm.enable({
+            draggable: true,
+            snappable: true,
+            snapDistance: 20,
+            hideMiddleMarkers: true,
+          });
+          polygon.pm.enableLayerDrag();
+          polygon.on('pm:drag', handleEdit);
+          polygon.on('pm:dragstart', handleEdit);
+          polygon.on('pm:dragend', handleEdit);
+          const element = polygon.getElement();
+          if (element) {
+            (element as HTMLElement).style.cursor = 'move';
+          }
+        }
+      }
+    }
+  }, [editingOperationalAreaId, editMode, updateOperationalArea]);
 
   const layerOptions = [
     { value: 'roadmap' as const, label: 'Bản đồ', icon: '🗺️' },

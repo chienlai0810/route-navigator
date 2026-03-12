@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { X, User, MapPin, Calendar, Edit2, Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,7 @@ import {
 import { useMapStore } from '@/hooks/useMapStore';
 import { PostOffice } from '@/types';
 import { routesApi, UpdateRoutePayload } from '@/api/routes';
+import { operationalAreasApi } from '@/api/operationalAreas';
 import { cn } from '@/lib/utils';
 import { routeTypeLabels, routeTypeColors, routeTypeOptions, productTypeOptions } from '@/constants';
 
@@ -39,6 +40,7 @@ const formSchema = z.object({
   type: z.enum(['delivery', 'pickup', 'all'] as const),
   productType: z.array(z.enum(['HH', 'KH', 'TH'] as const)).min(1, 'Chọn ít nhất một loại hàng hóa'),
   postOfficeId: z.string().min(1, 'Bưu cục là bắt buộc'),
+  operationalAreaId: z.string().optional(),
   employeeName: z.string().min(1, 'Nhân viên phụ trách là bắt buộc'),
 });
 
@@ -47,6 +49,7 @@ type FormValues = z.infer<typeof formSchema>;
 export function EditRoutePanel({ postOffices }: IProps) {
   const { 
     routes, 
+    operationalAreas,
     selectedRouteId, 
     setSelectedRoute, 
     updateRoute,
@@ -57,6 +60,7 @@ export function EditRoutePanel({ postOffices }: IProps) {
   } = useMapStore();
 
   const route = routes.find((r) => r.id === selectedRouteId);
+  console.log('route for editing:', route);
   const queryClient = useQueryClient();
 
   // Mutation for updating route
@@ -85,8 +89,28 @@ export function EditRoutePanel({ postOffices }: IProps) {
       type: 'delivery',
       productType: [],
       postOfficeId: '',
+      operationalAreaId: '',
       employeeName: '',
     },
+  });
+
+  const selectedPostOfficeId = form.watch('postOfficeId');
+  const selectedProductType = form.watch('productType');
+
+  // Fetch operational areas based on selected postOfficeId and productType (for edit form)
+  const { data: operationalAreasForSelect = [] } = useQuery({
+    queryKey: ['operational-areas-for-route-edit', selectedPostOfficeId, selectedProductType],
+    queryFn: () => {
+      if (!selectedPostOfficeId || !selectedProductType || selectedProductType.length === 0) {
+        return Promise.resolve([]);
+      }
+      const productTypeString = selectedProductType.join(';');
+      return operationalAreasApi.getAll({
+        postOfficeId: selectedPostOfficeId,
+        productType: productTypeString,
+      });
+    },
+    enabled: !!selectedPostOfficeId && selectedProductType.length > 0,
   });
 
   // Update form when route changes
@@ -98,6 +122,7 @@ export function EditRoutePanel({ postOffices }: IProps) {
         type: route.type,
         productType: route.productType || [],
         postOfficeId: route.postOfficeId || '',
+        operationalAreaId: route.operatingAreaId || '',
         employeeName: route.assignedEmployeeName || '',
       });
     }
@@ -157,6 +182,8 @@ export function EditRoutePanel({ postOffices }: IProps) {
         code: route.code || '',
         type: route.type,
         productType: route.productType || [],
+        postOfficeId: route.postOfficeId || '',
+        operationalAreaId: route.operatingAreaId,
         employeeName: route.assignedEmployeeName || '',
       });
     }
@@ -206,6 +233,7 @@ export function EditRoutePanel({ postOffices }: IProps) {
       postOfficeId: values.postOfficeId,
       staffMain: values.employeeName.trim(),
       area: convertPolygonToRouteArea(currentRoute.polygon),
+      operatingAreaId: values.operationalAreaId || undefined,
     };
 
     try {
@@ -296,6 +324,88 @@ export function EditRoutePanel({ postOffices }: IProps) {
           // Edit Mode
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSave)} className="space-y-4">
+              {/* Post Office */}
+              <FormField
+                control={form.control}
+                name="postOfficeId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Bưu cục *</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Chọn bưu cục" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {postOffices.map((po) => (
+                          <SelectItem key={po.id} value={po.id}>
+                            {po.name} ({po.code})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Product Type */}
+              <FormField
+                control={form.control}
+                name="productType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Loại hàng hóa *</FormLabel>
+                    <FormControl>
+                      <MultiSelect
+                        options={productTypeOptions}
+                        selected={field.value || []}
+                        onChange={field.onChange}
+                        placeholder="Chọn loại hàng hóa"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+               {/* Operational Area */}
+              <FormField
+                control={form.control}
+                name="operationalAreaId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Vùng hoạt động</FormLabel>
+                    <Select 
+                      onValueChange={field.onChange} 
+                      value={field.value}
+                      disabled={!selectedPostOfficeId || selectedProductType.length === 0}
+                    >
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Chọn vùng hoạt động" />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {operationalAreasForSelect.length === 0 ? (
+                          <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                            Không có vùng hoạt động
+                          </div>
+                        ) : (
+                          operationalAreasForSelect.map((area) => (
+                            <SelectItem key={area.id} value={area.id}>
+                              {area.name}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
               {/* Route Code */}
               <FormField
                 control={form.control}
@@ -358,26 +468,6 @@ export function EditRoutePanel({ postOffices }: IProps) {
                 )}
               />
 
-              {/* Product Type */}
-              <FormField
-                control={form.control}
-                name="productType"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Loại hàng hóa *</FormLabel>
-                    <FormControl>
-                      <MultiSelect
-                        options={productTypeOptions}
-                        selected={field.value || []}
-                        onChange={field.onChange}
-                        placeholder="Chọn loại hàng hóa"
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
               {/* Employee */}
               <FormField
                 control={form.control}
@@ -391,32 +481,6 @@ export function EditRoutePanel({ postOffices }: IProps) {
                         {...field}
                       />
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-               {/* Post Office */}
-              <FormField
-                control={form.control}
-                name="postOfficeId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Bưu cục *</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Chọn bưu cục" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {postOffices.map((po) => (
-                          <SelectItem key={po.id} value={po.id}>
-                            {po.name} ({po.code})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -453,6 +517,17 @@ export function EditRoutePanel({ postOffices }: IProps) {
                     </span>
                   </div>
                 )}
+                {route.operatingAreaId && (() => {
+                  const operationalArea = operationalAreas.find(area => area.id === route.operatingAreaId);
+                  return operationalArea ? (
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">Vùng hoạt động:</span>
+                      <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300">
+                        {operationalArea.name}
+                      </span>
+                    </div>
+                  ) : null;
+                })()}
               </div>
             </div>
 

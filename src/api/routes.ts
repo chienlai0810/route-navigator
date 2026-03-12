@@ -42,6 +42,7 @@ export interface RouteResponse {
   productType: string; // Format: "HH;TH" or single value "HH"
   postOfficeId: string | null;
   postOfficeName: string | null;
+  operatingAreaId: string | null;
   staffMain: string;
   staffSub: string | null;
   area: RouteArea;
@@ -69,6 +70,7 @@ export interface UpdateRoutePayload {
   postOfficeId?: string;
   staffMain?: string;
   area?: RouteAreaPayload;
+  operatingAreaId?: string;
 }
 
 // Check Point in Polygon Types

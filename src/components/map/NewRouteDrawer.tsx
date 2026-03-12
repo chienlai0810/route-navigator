@@ -345,6 +345,88 @@ export function NewRouteDrawer({
       {featureType === 'route' ? (
         <Form {...routeForm} key="route-form">
           <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4">
+            {/* Post Office */}
+            <FormField
+              control={routeForm.control}
+              name="postOfficeId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Bưu cục *</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn bưu cục" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {postOffices?.map((po) => (
+                        <SelectItem key={po.id} value={po.id}>
+                          {po.name} ({po.code})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+             {/* Product Type */}
+            <FormField
+              control={routeForm.control}
+              name="productType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Loại hàng hóa *</FormLabel>
+                  <FormControl>
+                    <MultiSelect
+                      options={productTypeOptions}
+                      selected={field.value || []}
+                      onChange={field.onChange}
+                      placeholder="Chọn loại hàng hóa"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* Operational Area */}
+            <FormField
+              control={routeForm.control}
+              name="operationalAreaId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Vùng hoạt động</FormLabel>
+                  <Select 
+                    onValueChange={field.onChange} 
+                    value={field.value}
+                    disabled={!selectedPostOfficeId || selectedProductType.length === 0}
+                  >
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Chọn vùng hoạt động" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {operationalAreas.length === 0 ? (
+                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                          Không có vùng hoạt động
+                        </div>
+                      ) : (
+                        operationalAreas.map((area) => (
+                          <SelectItem key={area.id} value={area.id}>
+                            {area.name}
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
             {/* Route Code */}
             <FormField
               control={routeForm.control}
@@ -408,26 +490,6 @@ export function NewRouteDrawer({
               )}
             />
 
-            {/* Product Type */}
-            <FormField
-              control={routeForm.control}
-              name="productType"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Loại hàng hóa *</FormLabel>
-                  <FormControl>
-                    <MultiSelect
-                      options={productTypeOptions}
-                      selected={field.value || []}
-                      onChange={field.onChange}
-                      placeholder="Chọn loại hàng hóa"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
             {/* Employee */}
             <FormField
               control={routeForm.control}
@@ -441,68 +503,6 @@ export function NewRouteDrawer({
                       {...field}
                     />
                   </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Post Office */}
-            <FormField
-              control={routeForm.control}
-              name="postOfficeId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Bưu cục *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Chọn bưu cục" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {postOffices?.map((po) => (
-                        <SelectItem key={po.id} value={po.id}>
-                          {po.name} ({po.code})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Operational Area */}
-            <FormField
-              control={routeForm.control}
-              name="operationalAreaId"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Vùng hoạt động</FormLabel>
-                  <Select 
-                    onValueChange={field.onChange} 
-                    value={field.value}
-                    disabled={!selectedPostOfficeId || selectedProductType.length === 0}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Chọn vùng hoạt động" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {operationalAreas.length === 0 ? (
-                        <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                          Không có vùng hoạt động
-                        </div>
-                      ) : (
-                        operationalAreas.map((area) => (
-                          <SelectItem key={area.id} value={area.id}>
-                            {area.name}
-                          </SelectItem>
-                        ))
-                      )}
-                    </SelectContent>
-                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
